@@ -15,6 +15,7 @@ import { errorHandler, notFoundHandler } from './shared/middleware/error.middlew
 
 // Routes
 import authRoutes from './modules/auth/auth.routes';
+import gameRoutes from './modules/game/game.routes';
 
 // Load environment variables
 dotenv.config();
@@ -89,6 +90,7 @@ app.get('/api', (_req, res) => {
 
 // Register module routes
 app.use('/api/auth', authRoutes);
+app.use('/api/game', gameRoutes);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {

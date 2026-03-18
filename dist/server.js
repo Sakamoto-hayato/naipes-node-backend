@@ -15,6 +15,7 @@ const logger_1 = __importDefault(require("./config/logger"));
 const email_1 = require("./config/email");
 const error_middleware_1 = require("./shared/middleware/error.middleware");
 const auth_routes_1 = __importDefault(require("./modules/auth/auth.routes"));
+const game_routes_1 = __importDefault(require("./modules/game/game.routes"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 exports.app = app;
@@ -76,6 +77,7 @@ app.get('/api', (_req, res) => {
     });
 });
 app.use('/api/auth', auth_routes_1.default);
+app.use('/api/game', game_routes_1.default);
 io.on('connection', (socket) => {
     logger_1.default.info(`Client connected: ${socket.id}`);
     socket.on('disconnect', () => {
