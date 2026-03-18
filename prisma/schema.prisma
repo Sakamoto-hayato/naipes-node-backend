@@ -1,0 +1,394 @@
+// Prisma Schema for Naipes Negros Backend
+// Database: MySQL 8.0
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id                String      @id @default(uuid())
+  email             String      @unique
+  username          String      @unique
+  password          String
+  firstName         String?
+  lastName          String?
+  gender            String?     // male, female, other
+  age               Int?
+  profilePicture    String?
+
+  // Game Statistics
+  coins             Int         @default(0)
+  gamesPlayed       Int         @default(0)
+  gamesWon          Int         @default(0)
+  gamesAbandoned    Int         @default(0)
+  points            Int         @default(0)
+  position          Int?        // Global ranking position
+  tournamentsWon    Int         @default(0)
+
+  // Game Settings
+  alternateCards    Boolean     @default(false)
+  alternateMode     Boolean     @default(false)
+  chatEnabled       Boolean     @default(true)
+  soundEnabled      Boolean     @default(true)
+
+  // Relationships
+  hostedGames       Game[]      @relation("HostUser")
+  guestGames        Game[]      @relation("GuestUser")
+  tournaments       Tournament[]
+  transactions      Transaction[]
+  messages          Message[]
+  deviceTokens      DeviceToken[]
+  withdrawRequests  WithdrawRequest[]
+
+  // Timestamps
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  deletedAt         DateTime?
+
+  @@index([email])
+  @@index([username])
+  @@index([points])
+  @@index([createdAt])
+  @@map("users")
+}
+
+// ============================================
+// GAME ENTITIES
+// ============================================
+
+model Game {
+  id                String      @id @default(uuid())
+
+  // Players
+  hostUserId        String
+  hostUser          User        @relation("HostUser", fields: [hostUserId], references: [id], onDelete: Cascade)
+  guestUserId       String?
+  guestUser         User?       @relation("GuestUser", fields: [guestUserId], references: [id], onDelete: Cascade)
+
+  // Game State
+  hostScore         Int         @default(0)
+  guestScore        Int         @default(0)
+  stake             Int         @default(0)
+  currentRound      Int         @default(1)
+
+  // Turn Management
+  turnUserId        String?     // Current player's turn
+  handUserId        String?     // Player with "hand" (dealer advantage)
+
+  // Settings
+  alternateMode     Boolean     @default(false)
+  isTournament      Boolean     @default(false)
+  playKey           String?     @unique
+
+  // Metadata
+  winnerId          String?
+
+  // Timestamps
+  startedAt         DateTime    @default(now())
+  finishedAt        DateTime?
+  abandonedAt       DateTime?
+
+  // Relationships
+  rounds            Round[]
+  messages          Message[]
+
+  @@index([hostUserId])
+  @@index([guestUserId])
+  @@index([playKey])
+  @@index([startedAt])
+  @@index([finishedAt])
+  @@map("games")
+}
+
+model Round {
+  id                String      @id @default(uuid())
+  gameId            String
+  game              Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  roundNumber       Int
+  handUserId        String      // Player with hand in this round
+
+  // Scores
+  hostScore         Int         @default(0)
+  guestScore        Int         @default(0)
+
+  // Cards (stored as JSON arrays)
+  hostCards         Json        // ["0_01", "1_02", "2_03"]
+  guestCards        Json        // ["0_04", "1_05", "2_06"]
+
+  // State
+  currentTrick      Int         @default(1)
+  winnerId          String?
+
+  // Relationships
+  tricks            Trick[]
+
+  // Timestamps
+  finishedAt        DateTime?
+  createdAt         DateTime    @default(now())
+
+  @@index([gameId])
+  @@index([roundNumber])
+  @@map("rounds")
+}
+
+model Trick {
+  id                String      @id @default(uuid())
+  roundId           String
+  round             Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  trickNumber       Int
+
+  // Cards played
+  handUserCard      String?     // Card ID (e.g., "0_01")
+  otherUserCard     String?     // Card ID
+
+  // Result
+  winnerId          String?     // User ID who won this trick
+
+  // Relationships
+  challenges        Challenge[]
+
+  // Timestamps
+  finishedAt        DateTime?
+  createdAt         DateTime    @default(now())
+
+  @@index([roundId])
+  @@index([trickNumber])
+  @@map("tricks")
+}
+
+model Challenge {
+  id                String      @id @default(uuid())
+  trickId           String
+  trick             Trick       @relation(fields: [trickId], references: [id], onDelete: Cascade)
+
+  type              String      // TRUCO, RETRUCO, VALECUATRO, ENVIDO, REAL_ENVIDO, FALTA_ENVIDO
+  userId            String      // User who made the challenge
+  accepted          Boolean?    // null = pending, true = accepted, false = rejected
+
+  // Timestamps
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([trickId])
+  @@index([type])
+  @@map("challenges")
+}
+
+// ============================================
+// TOURNAMENT
+// ============================================
+
+model Tournament {
+  id                String      @id @default(uuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stake             Int
+  maxPlayers        Int         @default(32)
+  currentRound      Int         @default(1)
+
+  // Opponents by round (User IDs)
+  round1OpponentId  String?
+  round2OpponentId  String?
+  round3OpponentId  String?
+  round4OpponentId  String?
+  round5OpponentId  String?
+
+  // Win tracking
+  isWinnerRound1    Boolean     @default(false)
+  isWinnerRound2    Boolean     @default(false)
+  isWinnerRound3    Boolean     @default(false)
+  isWinnerRound4    Boolean     @default(false)
+  isWinnerRound5    Boolean     @default(false)
+  isWinner          Boolean     @default(false)
+  isSecondPlace     Boolean     @default(false)
+
+  // Timestamps
+  createdAt         DateTime    @default(now())
+  finishedAt        DateTime?
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("tournaments")
+}
+
+// ============================================
+// LOBBY & MATCHMAKING
+// ============================================
+
+model LoungeEntry {
+  id                String      @id @default(uuid())
+  userId            String      @unique
+  stake             Int
+  isPinned          Boolean     @default(false)
+
+  createdAt         DateTime    @default(now())
+
+  @@index([userId])
+  @@index([stake])
+  @@map("lounge_entries")
+}
+
+// ============================================
+// ECONOMY
+// ============================================
+
+model Transaction {
+  id                String      @id @default(uuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  operation         Int         // 1=PURCHASE, 2=BET, 4=REWARD, 5=CHARGEBACK, 6=REWARD_TOURNAMENT, 7=BET_TOURNAMENT, 8=REGISTRATION_GIFT, 9=GIFT, 10=ADMIN_GIFT
+  amount            Int
+  balanceBefore     Int
+  balanceAfter      Int
+  description       String?     @db.Text
+
+  // External reference (for payments)
+  externalId        String?
+
+  createdAt         DateTime    @default(now())
+
+  @@index([userId])
+  @@index([operation])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+model CoinPackage {
+  id                String      @id @default(uuid())
+  name              String
+  coins             Int
+  price             Decimal     @db.Decimal(10, 2)
+  currency          String      @default("USD")
+  bonus             Int         @default(0)
+
+  isActive          Boolean     @default(true)
+  sortOrder         Int         @default(0)
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("coin_packages")
+}
+
+model WithdrawRequest {
+  id                String      @id @default(uuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount            Int
+  status            String      @default("pending") // pending, approved, rejected, completed
+
+  // Payment details
+  paymentMethod     String?
+  paymentDetails    Json?
+
+  // Admin notes
+  adminNotes        String?     @db.Text
+  processedBy       String?
+
+  createdAt         DateTime    @default(now())
+  processedAt       DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("withdraw_requests")
+}
+
+// ============================================
+// COMMUNICATION
+// ============================================
+
+model Message {
+  id                String      @id @default(uuid())
+  gameId            String
+  game              Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  text              String      @db.Text
+
+  createdAt         DateTime    @default(now())
+
+  @@index([gameId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model Contact {
+  id                String      @id @default(uuid())
+  email             String
+  subject           String
+  message           String      @db.Text
+
+  // User info (if logged in)
+  userId            String?
+
+  // Response
+  responded         Boolean     @default(false)
+  response          String?     @db.Text
+  respondedAt       DateTime?
+
+  createdAt         DateTime    @default(now())
+
+  @@index([email])
+  @@index([createdAt])
+  @@map("contacts")
+}
+
+// ============================================
+// PUSH NOTIFICATIONS
+// ============================================
+
+model DeviceToken {
+  id                String      @id @default(uuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token             String      @unique
+  platform          String      // ios, android
+  deviceModel       String?
+  appVersion        String?
+
+  isActive          Boolean     @default(true)
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([token])
+  @@index([platform])
+  @@map("device_tokens")
+}
+
+// ============================================
+// CONFIGURATION
+// ============================================
+
+model Configuration {
+  id                String      @id @default(uuid())
+  key               String      @unique
+  value             String      @db.Text
+  description       String?     @db.Text
+
+  updatedAt         DateTime    @updatedAt
+
+  @@index([key])
+  @@map("configurations")
+}
