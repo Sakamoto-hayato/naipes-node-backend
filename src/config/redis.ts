@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 
-// Redis 클라이언트 생성
+// Create Redis client
 const redis = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
   port: Number(process.env.REDIS_PORT) || 6379,
@@ -19,7 +19,7 @@ const redis = new Redis({
   },
 });
 
-// Redis 연결 이벤트
+// Redis connection events
 redis.on('connect', () => {
   console.log('✓ Redis connected');
 });
@@ -32,47 +32,47 @@ redis.on('ready', () => {
   console.log('✓ Redis ready');
 });
 
-// Redis 헬퍼 함수들
+// Redis helper functions
 export const redisHelper = {
-  // 게임 상태 저장
+  // Save game state
   async setGameState(gameId: string, state: any, ttl: number = 3600): Promise<void> {
     await redis.setex(`game:${gameId}`, ttl, JSON.stringify(state));
   },
 
-  // 게임 상태 조회
+  // Get game state
   async getGameState(gameId: string): Promise<any | null> {
     const data = await redis.get(`game:${gameId}`);
     return data ? JSON.parse(data) : null;
   },
 
-  // 게임 상태 삭제
+  // Delete game state
   async deleteGameState(gameId: string): Promise<void> {
     await redis.del(`game:${gameId}`);
   },
 
-  // 사용자 세션 저장
+  // Save user session
   async setUserSession(userId: string, sessionData: any, ttl: number = 86400): Promise<void> {
     await redis.setex(`session:${userId}`, ttl, JSON.stringify(sessionData));
   },
 
-  // 사용자 세션 조회
+  // Get user session
   async getUserSession(userId: string): Promise<any | null> {
     const data = await redis.get(`session:${userId}`);
     return data ? JSON.parse(data) : null;
   },
 
-  // 캐시 저장
+  // Save cache
   async setCache(key: string, value: any, ttl: number = 300): Promise<void> {
     await redis.setex(key, ttl, JSON.stringify(value));
   },
 
-  // 캐시 조회
+  // Get cache
   async getCache(key: string): Promise<any | null> {
     const data = await redis.get(key);
     return data ? JSON.parse(data) : null;
   },
 
-  // 캐시 삭제
+  // Delete cache
   async deleteCache(key: string): Promise<void> {
     await redis.del(key);
   },

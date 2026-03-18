@@ -39,7 +39,7 @@ export interface AuthResponse {
 export class AuthService {
   // 회원가입
   async register(data: RegisterDto): Promise<AuthResponse> {
-    // 이메일 중복 체크
+    // Check for duplicate email
     const existingEmail = await prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -48,7 +48,7 @@ export class AuthService {
       throw new AppError('Email already exists', 400, 'EMAIL_EXISTS');
     }
 
-    // 사용자명 중복 체크
+    // Check for duplicate username
     const existingUsername = await prisma.user.findUnique({
       where: { username: data.username },
     });
@@ -60,7 +60,7 @@ export class AuthService {
     // 비밀번호 해싱
     const hashedPassword = await bcrypt.hash(data.password, SALT_ROUNDS);
 
-    // 사용자 생성
+    // Create user
     const user = await prisma.user.create({
       data: {
         email: data.email,
@@ -84,7 +84,7 @@ export class AuthService {
       },
     });
 
-    // JWT 토큰 생성
+    // Generate JWT tokens
     const payload: JwtPayload = {
       userId: user.id,
       email: user.email,
@@ -114,7 +114,7 @@ export class AuthService {
 
   // 로그인
   async login(data: LoginDto): Promise<AuthResponse> {
-    // 사용자 조회
+    // Find user
     const user = await prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -123,7 +123,7 @@ export class AuthService {
       throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 
-    // 비밀번호 검증
+    // Verify password
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
 
     if (!isPasswordValid) {
@@ -135,7 +135,7 @@ export class AuthService {
       throw new AppError('Account has been deleted', 403, 'ACCOUNT_DELETED');
     }
 
-    // JWT 토큰 생성
+    // Generate JWT tokens
     const payload: JwtPayload = {
       userId: user.id,
       email: user.email,
@@ -163,16 +163,16 @@ export class AuthService {
     };
   }
 
-  // 토큰 갱신
+  // Refresh token
   async refreshToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
-    // Refresh Token 검증
+    // Verify refresh token
     const decoded = verifyRefreshToken(refreshToken);
 
     if (!decoded) {
       throw new AppError('Invalid or expired refresh token', 401, 'INVALID_REFRESH_TOKEN');
     }
 
-    // 사용자 존재 여부 확인
+    // Check if user exists
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
     });
@@ -185,7 +185,7 @@ export class AuthService {
       throw new AppError('Account has been deleted', 403, 'ACCOUNT_DELETED');
     }
 
-    // 새 토큰 쌍 생성
+    // Generate new token pair
     const payload: JwtPayload = {
       userId: user.id,
       email: user.email,
@@ -195,7 +195,7 @@ export class AuthService {
     return generateTokenPair(payload);
   }
 
-  // 사용자 정보 조회
+  // Get user information
   async getMe(userId: string): Promise<AuthResponse['user']> {
     const user = await prisma.user.findUnique({
       where: { id: userId },

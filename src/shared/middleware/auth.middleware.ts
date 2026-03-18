@@ -11,10 +11,10 @@ declare global {
   }
 }
 
-// 인증 미들웨어
+// Authentication middleware
 export function authenticate(req: Request, res: Response, next: NextFunction): void | Response {
   try {
-    // Authorization 헤더에서 토큰 추출
+    // Extract token from Authorization header
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -23,14 +23,14 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 
     const token = authHeader.substring(7); // 'Bearer ' 제거
 
-    // 토큰 검증
+    // Verify token
     const decoded = verifyAccessToken(token);
 
     if (!decoded) {
       return errorResponse(res, 'Invalid or expired token', 401, 'UNAUTHORIZED');
     }
 
-    // 요청 객체에 사용자 정보 추가
+    // Add user info to request object
     req.user = decoded;
     next();
   } catch (error) {
@@ -38,8 +38,8 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   }
 }
 
-// 선택적 인증 미들웨어 (토큰이 있으면 검증, 없으면 통과)
-export function optionalAuthenticate(req: Request, res: Response, next: NextFunction): void {
+// Optional authentication middleware (verify if token exists, pass through if not)
+export function optionalAuthenticate(req: Request, _res: Response, next: NextFunction): void {
   try {
     const authHeader = req.headers.authorization;
 

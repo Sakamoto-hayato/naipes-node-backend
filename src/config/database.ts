@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-// Prisma Client 인스턴스 생성
+// Create Prisma Client instance
 const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development'
     ? ['query', 'info', 'warn', 'error']
@@ -8,7 +8,7 @@ const prisma = new PrismaClient({
   errorFormat: 'pretty',
 });
 
-// Prisma 연결 확인
+// Verify Prisma connection
 export async function connectDatabase(): Promise<void> {
   try {
     await prisma.$connect();
@@ -19,7 +19,7 @@ export async function connectDatabase(): Promise<void> {
   }
 }
 
-// Prisma 연결 종료
+// Disconnect Prisma
 export async function disconnectDatabase(): Promise<void> {
   try {
     await prisma.$disconnect();

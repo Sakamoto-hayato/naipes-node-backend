@@ -5,23 +5,23 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 
-// 설정
+// Configuration
 import { connectDatabase, disconnectDatabase } from './config/database';
 import logger from './config/logger';
 
-// 미들웨어
+// Middleware
 import { errorHandler, notFoundHandler } from './shared/middleware/error.middleware';
 
-// 라우트
+// Routes
 import authRoutes from './modules/auth/auth.routes';
 
-// 환경 변수 로드
+// Load environment variables
 dotenv.config();
 
 const app: Application = express();
 const server = http.createServer(app);
 
-// Socket.IO 설정
+// Socket.IO configuration
 const io = new SocketIOServer(server, {
   cors: {
     origin: process.env.CORS_ORIGIN?.split(',') || '*',
@@ -32,7 +32,7 @@ const io = new SocketIOServer(server, {
   pingInterval: Number(process.env.WS_PING_INTERVAL) || 25000
 });
 
-// 기본 미들웨어
+// Basic middleware
 app.use(helmet());
 app.use(cors({
   origin: process.env.CORS_ORIGIN?.split(',') || '*',
@@ -41,7 +41,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 요청 로깅 (개발 환경)
+// Request logging (development)
 if (process.env.NODE_ENV === 'development') {
   app.use((req, _res, next) => {
     logger.info(`${req.method} ${req.path}`);
@@ -69,7 +69,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// API 라우트
+// API routes
 app.get('/api', (_req, res) => {
   res.json({
     message: 'Naipes Negros Backend API',
@@ -86,10 +86,10 @@ app.get('/api', (_req, res) => {
   });
 });
 
-// 모듈 라우트 등록
+// Register module routes
 app.use('/api/auth', authRoutes);
 
-// WebSocket 연결 처리
+// WebSocket connection handling
 io.on('connection', (socket) => {
   logger.info(`Client connected: ${socket.id}`);
 
@@ -101,31 +101,31 @@ io.on('connection', (socket) => {
     socket.emit('pong', { timestamp: Date.now() });
   });
 
-  // 인증 이벤트
-  socket.on('authenticate', (data) => {
+  // Authentication event
+  socket.on('authenticate', (_data) => {
     logger.info('Socket authentication request', { socketId: socket.id });
-    // TODO: JWT 토큰 검증 로직 추가
+    // TODO: Add JWT token verification logic
     socket.emit('authenticated', { success: true });
   });
 });
 
-// 404 핸들러
+// 404 handler
 app.use(notFoundHandler);
 
-// 에러 핸들러 (마지막에 등록)
+// Error handler (register last)
 app.use(errorHandler);
 
-// 서버 시작
+// Start server
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
 
 async function startServer() {
   try {
-    // 데이터베이스 연결
+    // Connect to database
     await connectDatabase();
     logger.info('Database connected successfully');
 
-    // 서버 시작
+    // Start server
     server.listen(PORT, () => {
       console.log('========================================');
       console.log('🎮 Naipes Negros Backend Server');
@@ -166,7 +166,7 @@ async function shutdown(signal: string) {
     }
   });
 
-  // 강제 종료 (30초 후)
+  // Force shutdown after 30 seconds
   setTimeout(() => {
     console.error('Forcing shutdown after 30 seconds');
     process.exit(1);
@@ -176,7 +176,7 @@ async function shutdown(signal: string) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-// 서버 시작
+// Start server
 startServer();
 
 export { app, server, io };

@@ -16,26 +16,26 @@ export class AppError extends Error {
   }
 }
 
-// 에러 핸들링 미들웨어
+// Error handling middleware
 export function errorHandler(
   err: Error | AppError,
   _req: Request,
   res: Response,
   _next: NextFunction
 ): Response {
-  // AppError 타입 체크
+  // Check if error is AppError type
   const isAppError = err instanceof AppError;
   const statusCode = isAppError ? err.statusCode : 500;
   const code = isAppError ? err.code : 'INTERNAL_SERVER_ERROR';
 
-  // 에러 로깅
+  // Log error
   if (statusCode >= 500) {
     logger.error(`${code}: ${err.message}`, { stack: err.stack });
   } else {
     logger.warn(`${code}: ${err.message}`);
   }
 
-  // 프로덕션 환경에서는 스택 트레이스 숨기기
+  // Hide stack trace in production environment
   const response: any = {
     success: false,
     error: {
@@ -51,7 +51,7 @@ export function errorHandler(
   return res.status(statusCode).json(response);
 }
 
-// 404 핸들러
+// 404 handler
 export function notFoundHandler(_req: Request, res: Response): Response {
   return res.status(404).json({
     success: false,
@@ -62,7 +62,7 @@ export function notFoundHandler(_req: Request, res: Response): Response {
   });
 }
 
-// Async 핸들러 래퍼
+// Async handler wrapper
 export function asyncHandler(fn: Function) {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);

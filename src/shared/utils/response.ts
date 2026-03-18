@@ -73,7 +73,7 @@ export function paginatedResponse<T>(
   return res.status(200).json(response);
 }
 
-// 생성 성공 응답
+// Created success response
 export function createdResponse<T>(
   res: Response,
   data: T,

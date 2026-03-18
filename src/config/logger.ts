@@ -4,7 +4,7 @@ import path from 'path';
 
 const logDir = process.env.LOG_DIR || './logs';
 
-// 로그 포맷 정의
+// Define log format
 const logFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.errors({ stack: true }),
@@ -16,7 +16,7 @@ const logFormat = winston.format.combine(
   })
 );
 
-// 일일 로테이션 파일 설정
+// Daily rotation file configuration
 const dailyRotateFileTransport = new DailyRotateFile({
   filename: path.join(logDir, 'app-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
@@ -25,7 +25,7 @@ const dailyRotateFileTransport = new DailyRotateFile({
   format: logFormat,
 });
 
-// 에러 로그 파일
+// Error log file
 const errorFileTransport = new DailyRotateFile({
   filename: path.join(logDir, 'error-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
@@ -35,7 +35,7 @@ const errorFileTransport = new DailyRotateFile({
   format: logFormat,
 });
 
-// Winston 로거 생성
+// Create Winston logger
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: logFormat,
@@ -45,7 +45,7 @@ const logger = winston.createLogger({
   ],
 });
 
-// 개발 환경에서는 콘솔에도 출력
+// Also output to console in development
 if (process.env.NODE_ENV !== 'production') {
   logger.add(new winston.transports.Console({
     format: winston.format.combine(
