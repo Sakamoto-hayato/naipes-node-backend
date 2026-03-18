@@ -5,10 +5,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
+const crypto_1 = __importDefault(require("crypto"));
 const database_1 = __importDefault(require("../../config/database"));
 const jwt_1 = require("../../shared/utils/jwt");
 const error_middleware_1 = require("../../shared/middleware/error.middleware");
+const email_1 = require("../../config/email");
 const SALT_ROUNDS = 12;
+const APP_URL = process.env.APP_URL || 'http://localhost:3001';
 class AuthService {
     async register(data) {
         const existingEmail = await database_1.default.user.findUnique({
@@ -147,6 +150,109 @@ class AuthService {
             points: user.points,
             position: user.position,
         };
+    }
+    async requestPasswordRecovery(email) {
+        const user = await database_1.default.user.findUnique({
+            where: { email },
+        });
+        if (!user) {
+            return { message: 'If the email exists, a password reset link has been sent' };
+        }
+        const resetToken = crypto_1.default.randomBytes(32).toString('hex');
+        const resetTokenExpiry = new Date(Date.now() + 3600000);
+        await database_1.default.user.update({
+            where: { id: user.id },
+            data: {
+                confirmationToken: resetToken,
+                tokenExpiry: resetTokenExpiry,
+            },
+        });
+        const resetUrl = `${APP_URL}/api/auth/reset-password?token=${resetToken}`;
+        try {
+            await (0, email_1.sendEmail)({
+                to: user.email,
+                subject: 'Password Reset Request - Naipes Negros',
+                html: email_1.emailTemplates.passwordReset(user.username, resetUrl),
+            });
+        }
+        catch (error) {
+            console.error('Failed to send recovery email:', error);
+        }
+        return { message: 'If the email exists, a password reset link has been sent' };
+    }
+    async resetPassword(token, newPassword) {
+        const user = await database_1.default.user.findFirst({
+            where: {
+                confirmationToken: token,
+                tokenExpiry: {
+                    gte: new Date(),
+                },
+            },
+        });
+        if (!user) {
+            throw new error_middleware_1.AppError('Invalid or expired reset token', 400, 'INVALID_TOKEN');
+        }
+        const hashedPassword = await bcrypt_1.default.hash(newPassword, SALT_ROUNDS);
+        await database_1.default.user.update({
+            where: { id: user.id },
+            data: {
+                password: hashedPassword,
+                confirmationToken: null,
+                tokenExpiry: null,
+            },
+        });
+        return { message: 'Password has been reset successfully' };
+    }
+    async confirmEmail(token) {
+        const user = await database_1.default.user.findFirst({
+            where: {
+                confirmationToken: token,
+            },
+        });
+        if (!user) {
+            throw new error_middleware_1.AppError('Invalid confirmation token', 400, 'INVALID_TOKEN');
+        }
+        if (user.enabled) {
+            return { message: 'Email already confirmed' };
+        }
+        await database_1.default.user.update({
+            where: { id: user.id },
+            data: {
+                enabled: true,
+                confirmationToken: null,
+            },
+        });
+        return { message: 'Email confirmed successfully' };
+    }
+    async resendConfirmation(email) {
+        const user = await database_1.default.user.findUnique({
+            where: { email },
+        });
+        if (!user) {
+            return { message: 'If the email exists, a confirmation link has been sent' };
+        }
+        if (user.enabled) {
+            throw new error_middleware_1.AppError('Email already confirmed', 400, 'ALREADY_CONFIRMED');
+        }
+        const confirmToken = crypto_1.default.randomBytes(32).toString('hex');
+        await database_1.default.user.update({
+            where: { id: user.id },
+            data: {
+                confirmationToken: confirmToken,
+            },
+        });
+        const confirmUrl = `${APP_URL}/api/auth/confirm-email?token=${confirmToken}`;
+        try {
+            await (0, email_1.sendEmail)({
+                to: user.email,
+                subject: 'Confirm Your Email - Naipes Negros',
+                html: email_1.emailTemplates.confirmation(user.username, confirmUrl),
+            });
+        }
+        catch (error) {
+            console.error('Failed to send confirmation email:', error);
+        }
+        return { message: 'If the email exists, a confirmation link has been sent' };
     }
 }
 exports.AuthService = AuthService;

@@ -1,9 +1,12 @@
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import prisma from '../../config/database';
 import { generateTokenPair, JwtPayload, verifyRefreshToken } from '../../shared/utils/jwt';
 import { AppError } from '../../shared/middleware/error.middleware';
+import { sendEmail, emailTemplates } from '../../config/email';
 
 const SALT_ROUNDS = 12;
+const APP_URL = process.env.APP_URL || 'http://localhost:3001';
 
 export interface RegisterDto {
   email: string;
@@ -218,6 +221,146 @@ export class AuthService {
       points: user.points,
       position: user.position,
     };
+  }
+
+  // Request password recovery
+  async requestPasswordRecovery(email: string): Promise<{ message: string }> {
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    // Don't reveal if user exists or not for security
+    if (!user) {
+      return { message: 'If the email exists, a password reset link has been sent' };
+    }
+
+    // Generate reset token (random 32 bytes)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+    // Save token to database
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        confirmationToken: resetToken,
+        tokenExpiry: resetTokenExpiry,
+      },
+    });
+
+    // Send recovery email
+    const resetUrl = `${APP_URL}/api/auth/reset-password?token=${resetToken}`;
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: 'Password Reset Request - Naipes Negros',
+        html: emailTemplates.passwordReset(user.username, resetUrl),
+      });
+    } catch (error) {
+      console.error('Failed to send recovery email:', error);
+      // Don't throw error to prevent email enumeration
+    }
+
+    return { message: 'If the email exists, a password reset link has been sent' };
+  }
+
+  // Reset password with token
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    const user = await prisma.user.findFirst({
+      where: {
+        confirmationToken: token,
+        tokenExpiry: {
+          gte: new Date(), // Token not expired
+        },
+      },
+    });
+
+    if (!user) {
+      throw new AppError('Invalid or expired reset token', 400, 'INVALID_TOKEN');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+    // Update password and clear token
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        confirmationToken: null,
+        tokenExpiry: null,
+      },
+    });
+
+    return { message: 'Password has been reset successfully' };
+  }
+
+  // Confirm email with token
+  async confirmEmail(token: string): Promise<{ message: string }> {
+    const user = await prisma.user.findFirst({
+      where: {
+        confirmationToken: token,
+      },
+    });
+
+    if (!user) {
+      throw new AppError('Invalid confirmation token', 400, 'INVALID_TOKEN');
+    }
+
+    if (user.enabled) {
+      return { message: 'Email already confirmed' };
+    }
+
+    // Enable account
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        enabled: true,
+        confirmationToken: null,
+      },
+    });
+
+    return { message: 'Email confirmed successfully' };
+  }
+
+  // Resend confirmation email
+  async resendConfirmation(email: string): Promise<{ message: string }> {
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return { message: 'If the email exists, a confirmation link has been sent' };
+    }
+
+    if (user.enabled) {
+      throw new AppError('Email already confirmed', 400, 'ALREADY_CONFIRMED');
+    }
+
+    // Generate new token
+    const confirmToken = crypto.randomBytes(32).toString('hex');
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        confirmationToken: confirmToken,
+      },
+    });
+
+    // Send confirmation email
+    const confirmUrl = `${APP_URL}/api/auth/confirm-email?token=${confirmToken}`;
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: 'Confirm Your Email - Naipes Negros',
+        html: emailTemplates.confirmation(user.username, confirmUrl),
+      });
+    } catch (error) {
+      console.error('Failed to send confirmation email:', error);
+    }
+
+    return { message: 'If the email exists, a confirmation link has been sent' };
   }
 }
 

@@ -37,6 +37,29 @@ class AuthController {
         const user = await auth_service_1.default.getMe(userId);
         return (0, response_1.successResponse)(res, user, 'User retrieved successfully');
     });
+    requestPasswordRecovery = (0, error_middleware_1.asyncHandler)(async (req, res) => {
+        const { email } = req.body;
+        const result = await auth_service_1.default.requestPasswordRecovery(email);
+        return (0, response_1.successResponse)(res, result, result.message);
+    });
+    resetPassword = (0, error_middleware_1.asyncHandler)(async (req, res) => {
+        const { token, password } = req.body;
+        const result = await auth_service_1.default.resetPassword(token, password);
+        return (0, response_1.successResponse)(res, result, result.message);
+    });
+    confirmEmail = (0, error_middleware_1.asyncHandler)(async (req, res) => {
+        const { token } = req.query;
+        if (!token || typeof token !== 'string') {
+            throw new Error('Token is required');
+        }
+        const result = await auth_service_1.default.confirmEmail(token);
+        return (0, response_1.successResponse)(res, result, result.message);
+    });
+    resendConfirmation = (0, error_middleware_1.asyncHandler)(async (req, res) => {
+        const { email } = req.body;
+        const result = await auth_service_1.default.resendConfirmation(email);
+        return (0, response_1.successResponse)(res, result, result.message);
+    });
 }
 exports.AuthController = AuthController;
 exports.default = new AuthController();

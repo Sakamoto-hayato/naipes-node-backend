@@ -34,6 +34,18 @@ export declare class AuthService {
         refreshToken: string;
     }>;
     getMe(userId: string): Promise<AuthResponse['user']>;
+    requestPasswordRecovery(email: string): Promise<{
+        message: string;
+    }>;
+    resetPassword(token: string, newPassword: string): Promise<{
+        message: string;
+    }>;
+    confirmEmail(token: string): Promise<{
+        message: string;
+    }>;
+    resendConfirmation(email: string): Promise<{
+        message: string;
+    }>;
 }
 declare const _default: AuthService;
 export default _default;

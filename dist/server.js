@@ -12,6 +12,7 @@ const helmet_1 = __importDefault(require("helmet"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const database_1 = require("./config/database");
 const logger_1 = __importDefault(require("./config/logger"));
+const email_1 = require("./config/email");
 const error_middleware_1 = require("./shared/middleware/error.middleware");
 const auth_routes_1 = __importDefault(require("./modules/auth/auth.routes"));
 dotenv_1.default.config();
@@ -96,6 +97,7 @@ async function startServer() {
     try {
         await (0, database_1.connectDatabase)();
         logger_1.default.info('Database connected successfully');
+        await (0, email_1.verifyEmailConnection)();
         server.listen(PORT, () => {
             console.log('========================================');
             console.log('🎮 Naipes Negros Backend Server');
@@ -111,6 +113,10 @@ async function startServer() {
             console.log('  POST /api/auth/login - User login');
             console.log('  POST /api/auth/refresh - Refresh token');
             console.log('  GET  /api/auth/me - Get current user');
+            console.log('  POST /api/auth/recover - Request password reset');
+            console.log('  POST /api/auth/reset-password - Reset password');
+            console.log('  GET  /api/auth/confirm-email - Confirm email');
+            console.log('  POST /api/auth/resend-confirmation - Resend confirmation');
             console.log('========================================');
         });
     }

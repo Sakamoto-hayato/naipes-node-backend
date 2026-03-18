@@ -49,6 +49,46 @@ export class AuthController {
 
     return successResponse(res, user, 'User retrieved successfully');
   });
+
+  // POST /api/auth/recover
+  requestPasswordRecovery = asyncHandler(async (req: Request, res: Response) => {
+    const { email } = req.body;
+
+    const result = await authService.requestPasswordRecovery(email);
+
+    return successResponse(res, result, result.message);
+  });
+
+  // POST /api/auth/reset-password
+  resetPassword = asyncHandler(async (req: Request, res: Response) => {
+    const { token, password } = req.body;
+
+    const result = await authService.resetPassword(token, password);
+
+    return successResponse(res, result, result.message);
+  });
+
+  // GET /api/auth/confirm-email
+  confirmEmail = asyncHandler(async (req: Request, res: Response) => {
+    const { token } = req.query;
+
+    if (!token || typeof token !== 'string') {
+      throw new Error('Token is required');
+    }
+
+    const result = await authService.confirmEmail(token);
+
+    return successResponse(res, result, result.message);
+  });
+
+  // POST /api/auth/resend-confirmation
+  resendConfirmation = asyncHandler(async (req: Request, res: Response) => {
+    const { email } = req.body;
+
+    const result = await authService.resendConfirmation(email);
+
+    return successResponse(res, result, result.message);
+  });
 }
 
 export default new AuthController();

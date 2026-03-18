@@ -25,6 +25,11 @@ model User {
   age               Int?
   profilePicture    String?
 
+  // Email Verification
+  enabled           Boolean     @default(false)
+  confirmationToken String?     @unique
+  tokenExpiry       DateTime?
+
   // Game Statistics
   coins             Int         @default(0)
   gamesPlayed       Int         @default(0)
@@ -58,6 +63,7 @@ model User {
   @@index([username])
   @@index([points])
   @@index([createdAt])
+  @@index([confirmationToken])
   @@map("users")
 }
 

@@ -4,6 +4,10 @@ export declare class AuthController {
     login: (req: Request, res: Response, next: import("express").NextFunction) => void;
     refreshToken: (req: Request, res: Response, next: import("express").NextFunction) => void;
     getMe: (req: Request, res: Response, next: import("express").NextFunction) => void;
+    requestPasswordRecovery: (req: Request, res: Response, next: import("express").NextFunction) => void;
+    resetPassword: (req: Request, res: Response, next: import("express").NextFunction) => void;
+    confirmEmail: (req: Request, res: Response, next: import("express").NextFunction) => void;
+    resendConfirmation: (req: Request, res: Response, next: import("express").NextFunction) => void;
 }
 declare const _default: AuthController;
 export default _default;

@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Configuration
 import { connectDatabase, disconnectDatabase } from './config/database';
 import logger from './config/logger';
+import { verifyEmailConnection } from './config/email';
 
 // Middleware
 import { errorHandler, notFoundHandler } from './shared/middleware/error.middleware';
@@ -125,6 +126,9 @@ async function startServer() {
     await connectDatabase();
     logger.info('Database connected successfully');
 
+    // Verify email connection
+    await verifyEmailConnection();
+
     // Start server
     server.listen(PORT, () => {
       console.log('========================================');
@@ -141,6 +145,10 @@ async function startServer() {
       console.log('  POST /api/auth/login - User login');
       console.log('  POST /api/auth/refresh - Refresh token');
       console.log('  GET  /api/auth/me - Get current user');
+      console.log('  POST /api/auth/recover - Request password reset');
+      console.log('  POST /api/auth/reset-password - Reset password');
+      console.log('  GET  /api/auth/confirm-email - Confirm email');
+      console.log('  POST /api/auth/resend-confirmation - Resend confirmation');
       console.log('========================================');
     });
   } catch (error) {

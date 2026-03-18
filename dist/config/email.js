@@ -1,69 +1,59 @@
-import nodemailer from 'nodemailer';
-import logger from './logger';
-
-// Email configuration
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.emailTemplates = exports.emailTransporter = void 0;
+exports.verifyEmailConnection = verifyEmailConnection;
+exports.sendEmail = sendEmail;
+const nodemailer_1 = __importDefault(require("nodemailer"));
+const logger_1 = __importDefault(require("./logger"));
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
 const EMAIL_PORT = Number(process.env.EMAIL_PORT) || 587;
 const EMAIL_USER = process.env.EMAIL_USER || '';
 const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD || '';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Naipes Negros <noreply@naipesnegros.com>';
-
-// Create transporter
-export const emailTransporter = nodemailer.createTransport({
-  host: EMAIL_HOST,
-  port: EMAIL_PORT,
-  secure: EMAIL_PORT === 465, // true for 465, false for other ports
-  auth: {
-    user: EMAIL_USER,
-    pass: EMAIL_PASSWORD,
-  },
+exports.emailTransporter = nodemailer_1.default.createTransport({
+    host: EMAIL_HOST,
+    port: EMAIL_PORT,
+    secure: EMAIL_PORT === 465,
+    auth: {
+        user: EMAIL_USER,
+        pass: EMAIL_PASSWORD,
+    },
 });
-
-// Verify connection on startup
-export async function verifyEmailConnection(): Promise<void> {
-  if (!EMAIL_USER || !EMAIL_PASSWORD) {
-    logger.warn('⚠ Email service not configured - EMAIL_USER and EMAIL_PASSWORD required');
-    return;
-  }
-
-  try {
-    await emailTransporter.verify();
-    logger.info('✓ Email service connected successfully');
-  } catch (error) {
-    logger.error('✗ Email service connection failed:', error);
-  }
+async function verifyEmailConnection() {
+    if (!EMAIL_USER || !EMAIL_PASSWORD) {
+        logger_1.default.warn('⚠ Email service not configured - EMAIL_USER and EMAIL_PASSWORD required');
+        return;
+    }
+    try {
+        await exports.emailTransporter.verify();
+        logger_1.default.info('✓ Email service connected successfully');
+    }
+    catch (error) {
+        logger_1.default.error('✗ Email service connection failed:', error);
+    }
 }
-
-// Send email helper
-interface SendEmailOptions {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
+async function sendEmail(options) {
+    try {
+        const info = await exports.emailTransporter.sendMail({
+            from: EMAIL_FROM,
+            to: options.to,
+            subject: options.subject,
+            html: options.html,
+            text: options.text || options.html.replace(/<[^>]*>/g, ''),
+        });
+        logger_1.default.info(`Email sent successfully to ${options.to}: ${info.messageId}`);
+        return true;
+    }
+    catch (error) {
+        logger_1.default.error(`Failed to send email to ${options.to}:`, error);
+        return false;
+    }
 }
-
-export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
-  try {
-    const info = await emailTransporter.sendMail({
-      from: EMAIL_FROM,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text || options.html.replace(/<[^>]*>/g, ''), // Strip HTML for text version
-    });
-
-    logger.info(`Email sent successfully to ${options.to}: ${info.messageId}`);
-    return true;
-  } catch (error) {
-    logger.error(`Failed to send email to ${options.to}:`, error);
-    return false;
-  }
-}
-
-// Email templates
-export const emailTemplates = {
-  // Welcome email
-  welcome: (username: string, confirmUrl: string) => `
+exports.emailTemplates = {
+    welcome: (username, confirmUrl) => `
     <!DOCTYPE html>
     <html>
     <head>
@@ -102,9 +92,7 @@ export const emailTemplates = {
     </body>
     </html>
   `,
-
-  // Email confirmation
-  confirmation: (username: string, confirmUrl: string) => `
+    confirmation: (username, confirmUrl) => `
     <!DOCTYPE html>
     <html>
     <head>
@@ -140,9 +128,7 @@ export const emailTemplates = {
     </body>
     </html>
   `,
-
-  // Password recovery
-  passwordReset: (username: string, resetUrl: string) => `
+    passwordReset: (username, resetUrl) => `
     <!DOCTYPE html>
     <html>
     <head>
@@ -184,9 +170,7 @@ export const emailTemplates = {
     </body>
     </html>
   `,
-
-  // Withdrawal confirmation
-  withdrawalRequest: (username: string, coins: number, amount: number, paypalEmail: string) => `
+    withdrawalRequest: (username, coins, amount, paypalEmail) => `
     <!DOCTYPE html>
     <html>
     <head>
@@ -226,10 +210,10 @@ export const emailTemplates = {
     </html>
   `,
 };
-
-export default {
-  emailTransporter,
-  verifyEmailConnection,
-  sendEmail,
-  emailTemplates,
+exports.default = {
+    emailTransporter: exports.emailTransporter,
+    verifyEmailConnection,
+    sendEmail,
+    emailTemplates: exports.emailTemplates,
 };
+//# sourceMappingURL=email.js.map
