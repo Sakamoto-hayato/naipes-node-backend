@@ -77,10 +77,13 @@ function compareCards(card1, card2) {
     return getCardValue(card1) - getCardValue(card2);
 }
 function parseCard(card) {
-    const [suitStr, valueStr] = card.split('_');
+    const parts = card.split('_');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        throw new Error(`Invalid card format: ${card}`);
+    }
     return {
-        suit: parseInt(suitStr),
-        value: parseInt(valueStr),
+        suit: parseInt(parts[0]),
+        value: parseInt(parts[1]),
     };
 }
 function formatCard(card) {
@@ -109,7 +112,7 @@ function getRandomCard(deck, usedCards = []) {
         return null;
     }
     const randomIndex = Math.floor(Math.random() * availableCards.length);
-    return availableCards[randomIndex];
+    return availableCards[randomIndex] ?? null;
 }
 function dealCards() {
     const usedCards = [];
@@ -121,6 +124,9 @@ function dealCards() {
             usedCards.push(card);
         }
     }
+    if (allCards.length < 6) {
+        throw new Error('Unable to deal enough cards');
+    }
     return {
         hostCards: [allCards[0], allCards[1], allCards[2]],
         guestCards: [allCards[3], allCards[4], allCards[5]],
@@ -131,17 +137,19 @@ function calculateEnvidoScore(cards) {
     cards.forEach(card => {
         const { suit, value } = parseCard(card);
         const envidoValue = value >= 10 ? 0 : value;
-        cardsBySuit[suit].push(envidoValue);
+        if (cardsBySuit[suit]) {
+            cardsBySuit[suit].push(envidoValue);
+        }
     });
     let maxScore = 0;
     Object.values(cardsBySuit).forEach(suitCards => {
         if (suitCards.length >= 2) {
             suitCards.sort((a, b) => b - a);
-            const score = suitCards[0] + suitCards[1] + 20;
+            const score = (suitCards[0] ?? 0) + (suitCards[1] ?? 0) + 20;
             maxScore = Math.max(maxScore, score);
         }
         else if (suitCards.length === 1) {
-            maxScore = Math.max(maxScore, suitCards[0]);
+            maxScore = Math.max(maxScore, suitCards[0] ?? 0);
         }
     });
     return maxScore;

@@ -15,49 +15,49 @@ datasource db {
 // ============================================
 
 model User {
-  id                String      @id @default(uuid())
-  email             String      @unique
-  username          String      @unique
-  password          String
-  firstName         String?
-  lastName          String?
-  gender            String?     // male, female, other
-  age               Int?
-  profilePicture    String?
+  id             String  @id @default(uuid())
+  email          String  @unique
+  username       String  @unique
+  password       String
+  firstName      String?
+  lastName       String?
+  gender         String? // male, female, other
+  age            Int?
+  profilePicture String?
 
   // Email Verification
-  enabled           Boolean     @default(false)
-  confirmationToken String?     @unique
+  enabled           Boolean   @default(false)
+  confirmationToken String?   @unique
   tokenExpiry       DateTime?
 
   // Game Statistics
-  coins             Int         @default(0)
-  gamesPlayed       Int         @default(0)
-  gamesWon          Int         @default(0)
-  gamesAbandoned    Int         @default(0)
-  points            Int         @default(0)
-  position          Int?        // Global ranking position
-  tournamentsWon    Int         @default(0)
+  coins          Int  @default(0)
+  gamesPlayed    Int  @default(0)
+  gamesWon       Int  @default(0)
+  gamesAbandoned Int  @default(0)
+  points         Int  @default(0)
+  position       Int? // Global ranking position
+  tournamentsWon Int  @default(0)
 
   // Game Settings
-  alternateCards    Boolean     @default(false)
-  alternateMode     Boolean     @default(false)
-  chatEnabled       Boolean     @default(true)
-  soundEnabled      Boolean     @default(true)
+  alternateCards Boolean @default(false)
+  alternateMode  Boolean @default(false)
+  chatEnabled    Boolean @default(true)
+  soundEnabled   Boolean @default(true)
 
   // Relationships
-  hostedGames       Game[]      @relation("HostUser")
-  guestGames        Game[]      @relation("GuestUser")
-  tournaments       Tournament[]
-  transactions      Transaction[]
-  messages          Message[]
-  deviceTokens      DeviceToken[]
-  withdrawRequests  WithdrawRequest[]
+  hostedGames      Game[]            @relation("HostUser")
+  guestGames       Game[]            @relation("GuestUser")
+  tournaments      Tournament[]
+  transactions     Transaction[]
+  messages         Message[]
+  deviceTokens     DeviceToken[]
+  withdrawRequests WithdrawRequest[]
 
   // Timestamps
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  deletedAt         DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([email])
   @@index([username])
@@ -72,40 +72,44 @@ model User {
 // ============================================
 
 model Game {
-  id                String      @id @default(uuid())
+  id String @id @default(uuid())
 
   // Players
-  hostUserId        String
-  hostUser          User        @relation("HostUser", fields: [hostUserId], references: [id], onDelete: Cascade)
-  guestUserId       String?
-  guestUser         User?       @relation("GuestUser", fields: [guestUserId], references: [id], onDelete: Cascade)
+  hostUserId  String
+  hostUser    User    @relation("HostUser", fields: [hostUserId], references: [id], onDelete: Cascade)
+  guestUserId String?
+  guestUser   User?   @relation("GuestUser", fields: [guestUserId], references: [id], onDelete: Cascade)
 
   // Game State
-  hostScore         Int         @default(0)
-  guestScore        Int         @default(0)
-  stake             Int         @default(0)
-  currentRound      Int         @default(1)
+  hostScore    Int     @default(0)
+  guestScore   Int     @default(0)
+  stake        Int     @default(0)
+  currentRound Int     @default(1)
+  status       String  @default("waiting") // waiting, pending, ready, active, finished
+  level        Int     @default(1)
+  isBot        Boolean @default(false)
 
   // Turn Management
-  turnUserId        String?     // Current player's turn
-  handUserId        String?     // Player with "hand" (dealer advantage)
-
-  // Settings
-  alternateMode     Boolean     @default(false)
-  isTournament      Boolean     @default(false)
-  playKey           String?     @unique
+  turnUserId String? // Current player's turn
+  handUserId String? // Player with "hand" (dealer advantage)
 
   // Metadata
-  winnerId          String?
+  userWonId String?
+
+  // Settings
+  alternateMode Boolean @default(false)
+  isTournament  Boolean @default(false)
+  playKey       String? @unique
 
   // Timestamps
-  startedAt         DateTime    @default(now())
-  finishedAt        DateTime?
-  abandonedAt       DateTime?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  abandonedAt DateTime?
 
   // Relationships
-  rounds            Round[]
-  messages          Message[]
+  rounds   Round[]
+  messages Message[]
 
   @@index([hostUserId])
   @@index([guestUserId])
@@ -116,31 +120,31 @@ model Game {
 }
 
 model Round {
-  id                String      @id @default(uuid())
-  gameId            String
-  game              Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  gameId String
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
-  roundNumber       Int
-  handUserId        String      // Player with hand in this round
+  roundNumber Int
+  handUserId  String // Player with hand in this round
 
   // Scores
-  hostScore         Int         @default(0)
-  guestScore        Int         @default(0)
+  hostScore  Int @default(0)
+  guestScore Int @default(0)
 
   // Cards (stored as JSON arrays)
-  hostCards         Json        // ["0_01", "1_02", "2_03"]
-  guestCards        Json        // ["0_04", "1_05", "2_06"]
+  hostCards  Json // ["0_01", "1_02", "2_03"]
+  guestCards Json // ["0_04", "1_05", "2_06"]
 
   // State
-  currentTrick      Int         @default(1)
-  winnerId          String?
+  currentTrick Int     @default(1)
+  winnerId     String?
 
   // Relationships
-  tricks            Trick[]
+  tricks Trick[]
 
   // Timestamps
-  finishedAt        DateTime?
-  createdAt         DateTime    @default(now())
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([gameId])
   @@index([roundNumber])
@@ -148,25 +152,25 @@ model Round {
 }
 
 model Trick {
-  id                String      @id @default(uuid())
-  roundId           String
-  round             Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  roundId String
+  round   Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
-  trickNumber       Int
+  trickNumber Int
 
   // Cards played
-  handUserCard      String?     // Card ID (e.g., "0_01")
-  otherUserCard     String?     // Card ID
+  handUserCard  String? // Card ID (e.g., "0_01")
+  otherUserCard String? // Card ID
 
   // Result
-  winnerId          String?     // User ID who won this trick
+  winnerId String? // User ID who won this trick
 
   // Relationships
-  challenges        Challenge[]
+  challenges Challenge[]
 
   // Timestamps
-  finishedAt        DateTime?
-  createdAt         DateTime    @default(now())
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([roundId])
   @@index([trickNumber])
@@ -174,17 +178,17 @@ model Trick {
 }
 
 model Challenge {
-  id                String      @id @default(uuid())
-  trickId           String
-  trick             Trick       @relation(fields: [trickId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  trickId String
+  trick   Trick  @relation(fields: [trickId], references: [id], onDelete: Cascade)
 
-  type              String      // TRUCO, RETRUCO, VALECUATRO, ENVIDO, REAL_ENVIDO, FALTA_ENVIDO
-  userId            String      // User who made the challenge
-  accepted          Boolean?    // null = pending, true = accepted, false = rejected
+  type     String // TRUCO, RETRUCO, VALECUATRO, ENVIDO, REAL_ENVIDO, FALTA_ENVIDO
+  userId   String // User who made the challenge
+  accepted Boolean? // null = pending, true = accepted, false = rejected
 
   // Timestamps
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([trickId])
   @@index([type])
@@ -196,33 +200,33 @@ model Challenge {
 // ============================================
 
 model Tournament {
-  id                String      @id @default(uuid())
-  userId            String
-  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  stake             Int
-  maxPlayers        Int         @default(32)
-  currentRound      Int         @default(1)
+  stake        Int
+  maxPlayers   Int @default(32)
+  currentRound Int @default(1)
 
   // Opponents by round (User IDs)
-  round1OpponentId  String?
-  round2OpponentId  String?
-  round3OpponentId  String?
-  round4OpponentId  String?
-  round5OpponentId  String?
+  round1OpponentId String?
+  round2OpponentId String?
+  round3OpponentId String?
+  round4OpponentId String?
+  round5OpponentId String?
 
   // Win tracking
-  isWinnerRound1    Boolean     @default(false)
-  isWinnerRound2    Boolean     @default(false)
-  isWinnerRound3    Boolean     @default(false)
-  isWinnerRound4    Boolean     @default(false)
-  isWinnerRound5    Boolean     @default(false)
-  isWinner          Boolean     @default(false)
-  isSecondPlace     Boolean     @default(false)
+  isWinnerRound1 Boolean @default(false)
+  isWinnerRound2 Boolean @default(false)
+  isWinnerRound3 Boolean @default(false)
+  isWinnerRound4 Boolean @default(false)
+  isWinnerRound5 Boolean @default(false)
+  isWinner       Boolean @default(false)
+  isSecondPlace  Boolean @default(false)
 
   // Timestamps
-  createdAt         DateTime    @default(now())
-  finishedAt        DateTime?
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
 
   @@index([userId])
   @@index([createdAt])
@@ -234,12 +238,12 @@ model Tournament {
 // ============================================
 
 model LoungeEntry {
-  id                String      @id @default(uuid())
-  userId            String      @unique
-  stake             Int
-  isPinned          Boolean     @default(false)
+  id       String  @id @default(uuid())
+  userId   String  @unique
+  stake    Int
+  isPinned Boolean @default(false)
 
-  createdAt         DateTime    @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([stake])
@@ -251,40 +255,44 @@ model LoungeEntry {
 // ============================================
 
 model Transaction {
-  id                String      @id @default(uuid())
-  userId            String
-  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  operation         Int         // 1=PURCHASE, 2=BET, 4=REWARD, 5=CHARGEBACK, 6=REWARD_TOURNAMENT, 7=BET_TOURNAMENT, 8=REGISTRATION_GIFT, 9=GIFT, 10=ADMIN_GIFT
-  amount            Int
-  balanceBefore     Int
-  balanceAfter      Int
-  description       String?     @db.Text
+  operation     Int // 1=PURCHASE, 2=BET, 3=WIN, 4=REWARD, 5=CHARGEBACK, 6=REWARD_TOURNAMENT, 7=BET_TOURNAMENT, 8=REGISTRATION_GIFT, 9=GIFT, 10=ADMIN_GIFT
+  amount        Int
+  balanceBefore Int?
+  balanceAfter  Int?
+  description   String? @db.Text
+
+  // Game reference (optional)
+  gameId String?
 
   // External reference (for payments)
-  externalId        String?
+  externalId String?
 
-  createdAt         DateTime    @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([gameId])
   @@index([operation])
   @@index([createdAt])
   @@map("transactions")
 }
 
 model CoinPackage {
-  id                String      @id @default(uuid())
-  name              String
-  coins             Int
-  price             Decimal     @db.Decimal(10, 2)
-  currency          String      @default("USD")
-  bonus             Int         @default(0)
+  id       String  @id @default(uuid())
+  name     String
+  coins    Int
+  price    Decimal @db.Decimal(10, 2)
+  currency String  @default("USD")
+  bonus    Int     @default(0)
 
-  isActive          Boolean     @default(true)
-  sortOrder         Int         @default(0)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
 
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isActive])
   @@index([sortOrder])
@@ -292,23 +300,23 @@ model CoinPackage {
 }
 
 model WithdrawRequest {
-  id                String      @id @default(uuid())
-  userId            String
-  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  amount            Int
-  status            String      @default("pending") // pending, approved, rejected, completed
+  amount Int
+  status String @default("pending") // pending, approved, rejected, completed
 
   // Payment details
-  paymentMethod     String?
-  paymentDetails    Json?
+  paymentMethod  String?
+  paymentDetails Json?
 
   // Admin notes
-  adminNotes        String?     @db.Text
-  processedBy       String?
+  adminNotes  String? @db.Text
+  processedBy String?
 
-  createdAt         DateTime    @default(now())
-  processedAt       DateTime?
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
 
   @@index([userId])
   @@index([status])
@@ -321,15 +329,15 @@ model WithdrawRequest {
 // ============================================
 
 model Message {
-  id                String      @id @default(uuid())
-  gameId            String
-  game              Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  userId            String
-  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  gameId String
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  text              String      @db.Text
+  text String @db.Text
 
-  createdAt         DateTime    @default(now())
+  createdAt DateTime @default(now())
 
   @@index([gameId])
   @@index([userId])
@@ -338,20 +346,20 @@ model Message {
 }
 
 model Contact {
-  id                String      @id @default(uuid())
-  email             String
-  subject           String
-  message           String      @db.Text
+  id      String @id @default(uuid())
+  email   String
+  subject String
+  message String @db.Text
 
   // User info (if logged in)
-  userId            String?
+  userId String?
 
   // Response
-  responded         Boolean     @default(false)
-  response          String?     @db.Text
-  respondedAt       DateTime?
+  responded   Boolean   @default(false)
+  response    String?   @db.Text
+  respondedAt DateTime?
 
-  createdAt         DateTime    @default(now())
+  createdAt DateTime @default(now())
 
   @@index([email])
   @@index([createdAt])
@@ -363,19 +371,19 @@ model Contact {
 // ============================================
 
 model DeviceToken {
-  id                String      @id @default(uuid())
-  userId            String
-  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  token             String      @unique
-  platform          String      // ios, android
-  deviceModel       String?
-  appVersion        String?
+  token       String  @unique
+  platform    String // ios, android
+  deviceModel String?
+  appVersion  String?
 
-  isActive          Boolean     @default(true)
+  isActive Boolean @default(true)
 
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([token])
@@ -388,12 +396,12 @@ model DeviceToken {
 // ============================================
 
 model Configuration {
-  id                String      @id @default(uuid())
-  key               String      @unique
-  value             String      @db.Text
-  description       String?     @db.Text
+  id          String  @id @default(uuid())
+  key         String  @unique
+  value       String  @db.Text
+  description String? @db.Text
 
-  updatedAt         DateTime    @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@index([key])
   @@map("configurations")

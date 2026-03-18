@@ -1,6 +1,6 @@
 import prisma from '../../config/database';
 import { AppError } from '../../shared/middleware/error.middleware';
-import { dealCards, getCardValue, compareCards, isValidCard, calculateEnvidoScore } from './constants/card-values';
+import { dealCards, compareCards, isValidCard } from './constants/card-values';
 
 export interface CreateGameDto {
   hostUserId: string;
@@ -85,7 +85,7 @@ export class GameService {
   }
 
   // Start game (both players ready)
-  async startGame(gameId: string, userId: string) {
+  async startGame(gameId: string, _userId: string) {
     const game = await prisma.game.findUnique({
       where: { id: gameId },
       include: { rounds: true },
@@ -198,12 +198,8 @@ export class GameService {
         gameId,
         roundNumber,
         handUserId,
-        hostFirstCard: hostCards[0],
-        hostSecondCard: hostCards[1],
-        hostThirdCard: hostCards[2],
-        guestFirstCard: guestCards[0],
-        guestSecondCard: guestCards[1],
-        guestThirdCard: guestCards[2],
+        hostCards: hostCards,
+        guestCards: guestCards,
       },
     });
 
@@ -269,8 +265,8 @@ export class GameService {
     // Validate card belongs to player
     const isHost = game.hostUserId === userId;
     const playerCards = isHost
-      ? [currentRound.hostFirstCard, currentRound.hostSecondCard, currentRound.hostThirdCard]
-      : [currentRound.guestFirstCard, currentRound.guestSecondCard, currentRound.guestThirdCard];
+      ? (currentRound.hostCards as string[])
+      : (currentRound.guestCards as string[]);
 
     if (!playerCards.includes(card)) {
       throw new AppError('Card not in hand', 400, 'CARD_NOT_IN_HAND');
@@ -278,7 +274,7 @@ export class GameService {
 
     // Check if card already played
     const playedCards = currentRound.tricks
-      .map(t => [t.handUserCardPlayed, t.otherUserCardPlayed])
+      .map(t => [t.handUserCard, t.otherUserCard])
       .flat()
       .filter(Boolean);
 
@@ -299,12 +295,12 @@ export class GameService {
     const updatedTrick = await prisma.trick.update({
       where: { id: currentTrick.id },
       data: isHandUser
-        ? { handUserCardPlayed: card }
-        : { otherUserCardPlayed: card },
+        ? { handUserCard: card }
+        : { otherUserCard: card },
     });
 
     // Check if trick is complete
-    if (updatedTrick.handUserCardPlayed && updatedTrick.otherUserCardPlayed) {
+    if (updatedTrick.handUserCard && updatedTrick.otherUserCard) {
       await this.completeTrick(currentTrick.id);
     } else {
       // Switch turn to other player
@@ -333,7 +329,7 @@ export class GameService {
       },
     });
 
-    if (!trick || !trick.handUserCardPlayed || !trick.otherUserCardPlayed) {
+    if (!trick || !trick.handUserCard || !trick.otherUserCard) {
       return;
     }
 
@@ -341,7 +337,7 @@ export class GameService {
     const { game } = round;
 
     // Compare cards
-    const comparison = compareCards(trick.handUserCardPlayed, trick.otherUserCardPlayed);
+    const comparison = compareCards(trick.handUserCard, trick.otherUserCard);
 
     let winnerId: string | null = null;
     if (comparison > 0) {
@@ -355,7 +351,7 @@ export class GameService {
     await prisma.trick.update({
       where: { id: trickId },
       data: {
-        trickWinnerId: winnerId,
+        winnerId: winnerId,
         finishedAt: new Date(),
       },
     });
@@ -397,9 +393,9 @@ export class GameService {
     let guestTricks = 0;
 
     tricks.forEach(trick => {
-      if (trick.trickWinnerId === game.hostUserId) {
+      if (trick.winnerId === game.hostUserId) {
         hostTricks++;
-      } else if (trick.trickWinnerId === game.guestUserId) {
+      } else if (trick.winnerId === game.guestUserId) {
         guestTricks++;
       }
     });

@@ -58,7 +58,7 @@ class GameService {
         });
         return game;
     }
-    async startGame(gameId, userId) {
+    async startGame(gameId, _userId) {
         const game = await database_1.default.game.findUnique({
             where: { id: gameId },
             include: { rounds: true },
@@ -150,12 +150,8 @@ class GameService {
                 gameId,
                 roundNumber,
                 handUserId,
-                hostFirstCard: hostCards[0],
-                hostSecondCard: hostCards[1],
-                hostThirdCard: hostCards[2],
-                guestFirstCard: guestCards[0],
-                guestSecondCard: guestCards[1],
-                guestThirdCard: guestCards[2],
+                hostCards: hostCards,
+                guestCards: guestCards,
             },
         });
         await database_1.default.trick.createMany({
@@ -205,13 +201,13 @@ class GameService {
         }
         const isHost = game.hostUserId === userId;
         const playerCards = isHost
-            ? [currentRound.hostFirstCard, currentRound.hostSecondCard, currentRound.hostThirdCard]
-            : [currentRound.guestFirstCard, currentRound.guestSecondCard, currentRound.guestThirdCard];
+            ? currentRound.hostCards
+            : currentRound.guestCards;
         if (!playerCards.includes(card)) {
             throw new error_middleware_1.AppError('Card not in hand', 400, 'CARD_NOT_IN_HAND');
         }
         const playedCards = currentRound.tricks
-            .map(t => [t.handUserCardPlayed, t.otherUserCardPlayed])
+            .map(t => [t.handUserCard, t.otherUserCard])
             .flat()
             .filter(Boolean);
         if (playedCards.includes(card)) {
@@ -225,10 +221,10 @@ class GameService {
         const updatedTrick = await database_1.default.trick.update({
             where: { id: currentTrick.id },
             data: isHandUser
-                ? { handUserCardPlayed: card }
-                : { otherUserCardPlayed: card },
+                ? { handUserCard: card }
+                : { otherUserCard: card },
         });
-        if (updatedTrick.handUserCardPlayed && updatedTrick.otherUserCardPlayed) {
+        if (updatedTrick.handUserCard && updatedTrick.otherUserCard) {
             await this.completeTrick(currentTrick.id);
         }
         else {
@@ -252,12 +248,12 @@ class GameService {
                 },
             },
         });
-        if (!trick || !trick.handUserCardPlayed || !trick.otherUserCardPlayed) {
+        if (!trick || !trick.handUserCard || !trick.otherUserCard) {
             return;
         }
         const { round } = trick;
         const { game } = round;
-        const comparison = (0, card_values_1.compareCards)(trick.handUserCardPlayed, trick.otherUserCardPlayed);
+        const comparison = (0, card_values_1.compareCards)(trick.handUserCard, trick.otherUserCard);
         let winnerId = null;
         if (comparison > 0) {
             winnerId = round.handUserId;
@@ -268,7 +264,7 @@ class GameService {
         await database_1.default.trick.update({
             where: { id: trickId },
             data: {
-                trickWinnerId: winnerId,
+                winnerId: winnerId,
                 finishedAt: new Date(),
             },
         });
@@ -300,10 +296,10 @@ class GameService {
         let hostTricks = 0;
         let guestTricks = 0;
         tricks.forEach(trick => {
-            if (trick.trickWinnerId === game.hostUserId) {
+            if (trick.winnerId === game.hostUserId) {
                 hostTricks++;
             }
-            else if (trick.trickWinnerId === game.guestUserId) {
+            else if (trick.winnerId === game.guestUserId) {
                 guestTricks++;
             }
         });

@@ -105,10 +105,13 @@ export function compareCards(card1: string, card2: string): number {
 
 // Parse card string to get suit and value
 export function parseCard(card: string): { suit: CardSuit; value: number } {
-  const [suitStr, valueStr] = card.split('_');
+  const parts = card.split('_');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error(`Invalid card format: ${card}`);
+  }
   return {
-    suit: parseInt(suitStr) as CardSuit,
-    value: parseInt(valueStr),
+    suit: parseInt(parts[0]) as CardSuit,
+    value: parseInt(parts[1]),
   };
 }
 
@@ -147,7 +150,7 @@ export function getRandomCard(deck: string[], usedCards: string[] = []): string 
   }
 
   const randomIndex = Math.floor(Math.random() * availableCards.length);
-  return availableCards[randomIndex];
+  return availableCards[randomIndex] ?? null;
 }
 
 // Shuffle and deal cards (returns 6 cards: 3 for each player)
@@ -164,9 +167,14 @@ export function dealCards(): { hostCards: string[]; guestCards: string[] } {
     }
   }
 
+  // Ensure we have 6 cards
+  if (allCards.length < 6) {
+    throw new Error('Unable to deal enough cards');
+  }
+
   return {
-    hostCards: [allCards[0], allCards[1], allCards[2]],
-    guestCards: [allCards[3], allCards[4], allCards[5]],
+    hostCards: [allCards[0]!, allCards[1]!, allCards[2]!],
+    guestCards: [allCards[3]!, allCards[4]!, allCards[5]!],
   };
 }
 
@@ -179,7 +187,9 @@ export function calculateEnvidoScore(cards: string[]): number {
     const { suit, value } = parseCard(card);
     // Envido values: figures = 0, others = face value
     const envidoValue = value >= 10 ? 0 : value;
-    cardsBySuit[suit].push(envidoValue);
+    if (cardsBySuit[suit]) {
+      cardsBySuit[suit].push(envidoValue);
+    }
   });
 
   let maxScore = 0;
@@ -190,11 +200,11 @@ export function calculateEnvidoScore(cards: string[]): number {
       // Sort descending
       suitCards.sort((a, b) => b - a);
       // Best two cards + 20
-      const score = suitCards[0] + suitCards[1] + 20;
+      const score = (suitCards[0] ?? 0) + (suitCards[1] ?? 0) + 20;
       maxScore = Math.max(maxScore, score);
     } else if (suitCards.length === 1) {
       // Single card (no suit bonus)
-      maxScore = Math.max(maxScore, suitCards[0]);
+      maxScore = Math.max(maxScore, suitCards[0] ?? 0);
     }
   });
 
