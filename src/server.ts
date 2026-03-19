@@ -22,6 +22,7 @@ import coinRoutes from './modules/coin/coin.routes';
 import rankingRoutes from './modules/ranking/ranking.routes';
 import messageRoutes from './modules/message/message.routes';
 import withdrawalRoutes from './modules/withdrawal/withdrawal.routes';
+import friendRoutes from './modules/friend/friend.routes';
 
 // WebSocket Gateway
 import GameGateway from './modules/game/game.gateway';
@@ -106,6 +107,7 @@ app.use('/api/coins', coinRoutes);
 app.use('/api/ranking', rankingRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
+app.use('/api/friends', friendRoutes);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {

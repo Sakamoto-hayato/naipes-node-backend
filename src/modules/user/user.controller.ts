@@ -132,6 +132,122 @@ export class UserController {
     const result = await userService.deleteAccount(userId, password);
     return successResponse(res, result, 'Account deleted successfully');
   });
+
+  // GET /api/users/:id - Get user profile by ID
+  getUserById = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    if (!id) {
+      throw new AppError('User ID is required', 400, 'MISSING_FIELDS');
+    }
+
+    const profile = await userService.getUserProfile(id);
+    return successResponse(res, profile, 'User profile retrieved successfully');
+  });
+
+  // GET /api/users/:id/stats - Get user stats by ID
+  getUserStatsById = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    if (!id) {
+      throw new AppError('User ID is required', 400, 'MISSING_FIELDS');
+    }
+
+    const stats = await userService.getUserStats(id);
+    return successResponse(res, stats, 'User statistics retrieved successfully');
+  });
+
+  // GET /api/users/:id/history - Get user game history by ID
+  getUserHistoryById = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { limit, offset, page } = req.query;
+
+    if (!id) {
+      throw new AppError('User ID is required', 400, 'MISSING_FIELDS');
+    }
+
+    const pageNum = page ? Number(page) : 1;
+    const limitNum = limit ? Number(limit) : 10;
+    const offsetNum = offset ? Number(offset) : (pageNum - 1) * limitNum;
+
+    const games = await userService.getUserGameHistory(
+      id,
+      limitNum,
+      offsetNum
+    );
+
+    const total = games.length; // TODO: Get actual total count from DB
+    const hasMore = games.length === limitNum;
+
+    return successResponse(res, { games, total, hasMore }, 'Game history retrieved successfully');
+  });
+
+  // GET /api/users/search?q=query - Search users by username
+  searchUsers = asyncHandler(async (req: Request, res: Response) => {
+    const { q } = req.query;
+
+    if (!q || typeof q !== 'string') {
+      throw new AppError('Search query is required', 400, 'MISSING_FIELDS');
+    }
+
+    const users = await userService.searchUsers(q);
+    return successResponse(res, users, 'Users found successfully');
+  });
+
+  // GET /api/users/me/achievements - Get current user's achievements
+  getUserAchievements = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    const achievements = await userService.getUserAchievements(userId);
+    return successResponse(res, achievements, 'Achievements retrieved successfully');
+  });
+
+  // GET /api/users/:id/achievements - Get user achievements by ID
+  getUserAchievementsById = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    if (!id) {
+      throw new AppError('User ID is required', 400, 'MISSING_FIELDS');
+    }
+
+    const achievements = await userService.getUserAchievements(id);
+    return successResponse(res, achievements, 'Achievements retrieved successfully');
+  });
+
+  // POST /api/users/me/avatar - Upload avatar image
+  uploadAvatar = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    // TODO: Implement file upload logic with multer
+    // For now, return a placeholder
+    throw new AppError('Avatar upload not yet implemented', 501, 'NOT_IMPLEMENTED');
+  });
+
+  // PUT /api/users/me/avatar - Update avatar (predefined avatar ID)
+  updateAvatar = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    const { avatarId, avatar } = req.body;
+
+    if (!avatarId && !avatar) {
+      throw new AppError('Avatar ID or avatar URL is required', 400, 'MISSING_FIELDS');
+    }
+
+    const updatedProfile = await userService.updateProfile(userId, {
+      profilePicture: avatar || avatarId,
+    });
+
+    return successResponse(res, updatedProfile, 'Avatar updated successfully');
+  });
 }
 
 export default new UserController();

@@ -53,6 +53,8 @@ model User {
   messages         Message[]
   deviceTokens     DeviceToken[]
   withdrawRequests WithdrawRequest[]
+  friends          Friend[]          @relation("UserFriends")
+  friendOf         Friend[]          @relation("FriendUsers")
 
   // Timestamps
   createdAt DateTime  @default(now())
@@ -389,6 +391,40 @@ model DeviceToken {
   @@index([token])
   @@index([platform])
   @@map("device_tokens")
+}
+
+// ============================================
+// FRIENDS & SOCIAL
+// ============================================
+
+model Friend {
+  id String @id @default(uuid())
+
+  // User who sent the friend request
+  userId String
+  user   User   @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+
+  // User who received the friend request
+  friendUserId String
+  friendUser   User   @relation("FriendUsers", fields: [friendUserId], references: [id], onDelete: Cascade)
+
+  // Status: pending, accepted, rejected, blocked
+  status String @default("pending") // pending, accepted, rejected, blocked
+
+  // Who initiated the request
+  requestedBy String // userId who sent the request
+
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  acceptedAt DateTime?
+  blockedAt  DateTime?
+
+  @@unique([userId, friendUserId])
+  @@index([userId])
+  @@index([friendUserId])
+  @@index([status])
+  @@map("friends")
 }
 
 // ============================================
