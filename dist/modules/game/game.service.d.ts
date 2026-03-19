@@ -1,3 +1,4 @@
+import { ChallengeType } from './constants/challenge-values';
 export interface CreateGameDto {
     hostUserId: string;
     guestUserId?: string;
@@ -159,7 +160,17 @@ export declare class GameService {
             points: number;
         } | null;
         rounds: ({
-            tricks: {
+            tricks: ({
+                challenges: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    userId: string;
+                    type: string;
+                    trickId: string;
+                    accepted: boolean | null;
+                }[];
+            } & {
                 id: string;
                 createdAt: Date;
                 finishedAt: Date | null;
@@ -168,7 +179,7 @@ export declare class GameService {
                 roundId: string;
                 handUserCard: string | null;
                 otherUserCard: string | null;
-            }[];
+            })[];
         } & {
             id: string;
             createdAt: Date;
@@ -221,7 +232,17 @@ export declare class GameService {
             points: number;
         } | null;
         rounds: ({
-            tricks: {
+            tricks: ({
+                challenges: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    userId: string;
+                    type: string;
+                    trickId: string;
+                    accepted: boolean | null;
+                }[];
+            } & {
                 id: string;
                 createdAt: Date;
                 finishedAt: Date | null;
@@ -230,7 +251,7 @@ export declare class GameService {
                 roundId: string;
                 handUserCard: string | null;
                 otherUserCard: string | null;
-            }[];
+            })[];
         } & {
             id: string;
             createdAt: Date;
@@ -281,7 +302,17 @@ export declare class GameService {
             points: number;
         } | null;
         rounds: ({
-            tricks: {
+            tricks: ({
+                challenges: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    userId: string;
+                    type: string;
+                    trickId: string;
+                    accepted: boolean | null;
+                }[];
+            } & {
                 id: string;
                 createdAt: Date;
                 finishedAt: Date | null;
@@ -290,7 +321,7 @@ export declare class GameService {
                 roundId: string;
                 handUserCard: string | null;
                 otherUserCard: string | null;
-            }[];
+            })[];
         } & {
             id: string;
             createdAt: Date;
@@ -360,6 +391,20 @@ export declare class GameService {
         finishedAt: Date | null;
         abandonedAt: Date | null;
     })[]>;
+    makeChallenge(data: {
+        gameId: string;
+        userId: string;
+        type: ChallengeType;
+    }): Promise<any>;
+    respondToChallenge(data: {
+        gameId: string;
+        userId: string;
+        challengeId: string;
+        accepted: boolean;
+        raiseType?: ChallengeType;
+    }): Promise<any>;
+    private processRejectedChallenge;
+    calculateEnvidoWinner(gameId: string): Promise<any>;
 }
 declare const _default: GameService;
 export default _default;

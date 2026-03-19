@@ -1,6 +1,13 @@
 import prisma from '../../config/database';
 import { AppError } from '../../shared/middleware/error.middleware';
-import { dealCards, compareCards, isValidCard } from './constants/card-values';
+import { dealCards, compareCards, isValidCard, calculateEnvidoScore } from './constants/card-values';
+import {
+  ChallengeType,
+  canMakeChallenge,
+  calculateChallengePoints,
+  getChallengeCategory,
+  ChallengeCategory,
+} from './constants/challenge-values';
 
 export interface CreateGameDto {
   hostUserId: string;
@@ -524,7 +531,12 @@ export class GameService {
         },
         rounds: {
           include: {
-            tricks: { orderBy: { trickNumber: 'asc' } },
+            tricks: {
+              include: {
+                challenges: { orderBy: { createdAt: 'asc' } },
+              },
+              orderBy: { trickNumber: 'asc' },
+            },
           },
           orderBy: { roundNumber: 'desc' },
         },
@@ -571,6 +583,314 @@ export class GameService {
     });
 
     return games;
+  }
+
+  // ============================================
+  // CHALLENGE METHODS
+  // ============================================
+
+  // Make a challenge (Truco, Envido, etc.)
+  async makeChallenge(data: {
+    gameId: string;
+    userId: string;
+    type: ChallengeType;
+  }): Promise<any> {
+    const { gameId, userId, type } = data;
+
+    // Get game with current round and tricks
+    const game = await this.getGameState(gameId);
+
+    if (!game) {
+      throw new AppError('Game not found', 404, 'GAME_NOT_FOUND');
+    }
+
+    if (game.status !== 'active') {
+      throw new AppError('Game is not active', 400, 'GAME_NOT_ACTIVE');
+    }
+
+    // Check if it's the user's turn
+    if (game.turnUserId !== userId) {
+      throw new AppError('Not your turn', 400, 'NOT_YOUR_TURN');
+    }
+
+    // Get current round
+    const currentRound = game.rounds[game.rounds.length - 1];
+    if (!currentRound) {
+      throw new AppError('No active round', 400, 'NO_ACTIVE_ROUND');
+    }
+
+    // Get current trick
+    const currentTrick = currentRound.tricks.find(t => !t.finishedAt);
+    if (!currentTrick) {
+      throw new AppError('No active trick', 400, 'NO_ACTIVE_TRICK');
+    }
+
+    // Check if challenge can be made
+    const existingChallenges = (currentTrick.challenges || []).map(c => ({
+      type: c.type as ChallengeType,
+      accepted: c.accepted
+    }));
+    const validation = canMakeChallenge(type, existingChallenges, currentTrick.trickNumber);
+
+    if (!validation.allowed) {
+      throw new AppError(validation.reason || 'Challenge not allowed', 400, 'CHALLENGE_NOT_ALLOWED');
+    }
+
+    // Create challenge
+    const challenge = await prisma.challenge.create({
+      data: {
+        trickId: currentTrick.id,
+        type,
+        userId,
+        accepted: null, // Pending
+      },
+    });
+
+    return {
+      challenge,
+      game: await this.getGameState(gameId),
+    };
+  }
+
+  // Respond to a challenge (accept or reject)
+  async respondToChallenge(data: {
+    gameId: string;
+    userId: string;
+    challengeId: string;
+    accepted: boolean;
+    raiseType?: ChallengeType; // If raising the challenge
+  }): Promise<any> {
+    const { gameId, userId, challengeId, accepted, raiseType } = data;
+
+    // Get challenge
+    const challenge = await prisma.challenge.findUnique({
+      where: { id: challengeId },
+      include: {
+        trick: {
+          include: {
+            round: {
+              include: {
+                game: true,
+              },
+            },
+            challenges: true,
+          },
+        },
+      },
+    });
+
+    if (!challenge) {
+      throw new AppError('Challenge not found', 404, 'CHALLENGE_NOT_FOUND');
+    }
+
+    // Verify it's the correct game
+    if (challenge.trick.round.game.id !== gameId) {
+      throw new AppError('Challenge not in this game', 400, 'INVALID_CHALLENGE');
+    }
+
+    // Verify challenge is pending
+    if (challenge.accepted !== null) {
+      throw new AppError('Challenge already responded to', 400, 'CHALLENGE_ALREADY_RESPONDED');
+    }
+
+    // Verify it's the opponent responding (not the challenger)
+    if (challenge.userId === userId) {
+      throw new AppError('Cannot respond to your own challenge', 400, 'CANNOT_RESPOND_OWN_CHALLENGE');
+    }
+
+    const game = challenge.trick.round.game;
+
+    // Verify user is part of the game
+    if (game.hostUserId !== userId && game.guestUserId !== userId) {
+      throw new AppError('You are not in this game', 403, 'FORBIDDEN');
+    }
+
+    // If raising, create new challenge instead
+    if (raiseType) {
+      // Validate the raise
+      const mappedChallenges = challenge.trick.challenges.map(c => ({
+        type: c.type as ChallengeType,
+        accepted: c.accepted
+      }));
+      const validation = canMakeChallenge(
+        raiseType,
+        mappedChallenges,
+        challenge.trick.trickNumber
+      );
+
+      if (!validation.allowed) {
+        throw new AppError(validation.reason || 'Invalid raise', 400, 'INVALID_RAISE');
+      }
+
+      // Accept the current challenge
+      await prisma.challenge.update({
+        where: { id: challengeId },
+        data: { accepted: true },
+      });
+
+      // Create the raise challenge
+      const raiseChallenge = await prisma.challenge.create({
+        data: {
+          trickId: challenge.trickId,
+          type: raiseType,
+          userId,
+          accepted: null, // Pending
+        },
+      });
+
+      return {
+        challenge: raiseChallenge,
+        game: await this.getGameState(gameId),
+      };
+    }
+
+    // Update challenge with response
+    await prisma.challenge.update({
+      where: { id: challengeId },
+      data: { accepted },
+    });
+
+    // If rejected, award points immediately
+    if (!accepted) {
+      await this.processRejectedChallenge(challenge.trick.round.id, challenge.type as ChallengeType, challenge.userId);
+    }
+
+    return {
+      challenge: { ...challenge, accepted },
+      game: await this.getGameState(gameId),
+    };
+  }
+
+  // Process a rejected challenge (award points to challenger)
+  private async processRejectedChallenge(
+    roundId: string,
+    challengeType: ChallengeType,
+    challengerUserId: string
+  ) {
+    const round = await prisma.round.findUnique({
+      where: { id: roundId },
+      include: { game: true },
+    });
+
+    if (!round) {
+      return;
+    }
+
+    const game = round.game;
+    const isHost = game.hostUserId === challengerUserId;
+    const category = getChallengeCategory(challengeType);
+
+    // For rejected challenges, challenger gets points minus 1
+    const challengePoints = calculateChallengePoints(
+      [{ type: challengeType, accepted: false }],
+      game.hostScore,
+      game.guestScore
+    );
+
+    let pointsToAward = 1; // Base rejection points
+
+    if (category === ChallengeCategory.TRUCO) {
+      // Truco rejection: previous level points
+      if (challengeType === ChallengeType.TRUCO) pointsToAward = 1;
+      else if (challengeType === ChallengeType.RETRUCO) pointsToAward = 2;
+      else if (challengeType === ChallengeType.VALE_CUATRO) pointsToAward = 3;
+    } else if (category === ChallengeCategory.ENVIDO) {
+      // Envido rejection: challenger gets envido points
+      pointsToAward = challengePoints.envidoPoints;
+    }
+
+    // Award points
+    const newHostScore = isHost ? game.hostScore + pointsToAward : game.hostScore;
+    const newGuestScore = !isHost ? game.guestScore + pointsToAward : game.guestScore;
+
+    await prisma.game.update({
+      where: { id: game.id },
+      data: {
+        hostScore: newHostScore,
+        guestScore: newGuestScore,
+      },
+    });
+
+    // Check if game won
+    if (newHostScore >= 30 || newGuestScore >= 30) {
+      await this.completeGame(game.id);
+    }
+  }
+
+  // Calculate and award Envido points
+  async calculateEnvidoWinner(gameId: string): Promise<any> {
+    const game = await this.getGameState(gameId);
+
+    if (!game) {
+      throw new AppError('Game not found', 404, 'GAME_NOT_FOUND');
+    }
+
+    const currentRound = game.rounds[game.rounds.length - 1];
+    if (!currentRound) {
+      throw new AppError('No active round', 400, 'NO_ACTIVE_ROUND');
+    }
+
+    const currentTrick = currentRound.tricks[0]; // Envido is always in first trick
+    if (!currentTrick) {
+      throw new AppError('No trick found', 400, 'NO_TRICK_FOUND');
+    }
+
+    // Get accepted envido challenges
+    const envidoChallenges = currentTrick.challenges?.filter(
+      c => getChallengeCategory(c.type as ChallengeType) === ChallengeCategory.ENVIDO && c.accepted === true
+    ) || [];
+
+    if (envidoChallenges.length === 0) {
+      throw new AppError('No accepted envido challenges', 400, 'NO_ENVIDO_CHALLENGES');
+    }
+
+    // Calculate envido scores
+    const hostCards = currentRound.hostCards as string[];
+    const guestCards = currentRound.guestCards as string[];
+
+    const hostEnvido = calculateEnvidoScore(hostCards);
+    const guestEnvido = calculateEnvidoScore(guestCards);
+
+    // Determine winner
+    const envidoWinnerId = hostEnvido > guestEnvido
+      ? game.hostUserId
+      : guestEnvido > hostEnvido
+      ? game.guestUserId
+      : currentRound.handUserId; // Tie goes to hand
+
+    const isHost = envidoWinnerId === game.hostUserId;
+
+    // Calculate points
+    const challengePoints = calculateChallengePoints(
+      envidoChallenges.map(c => ({ type: c.type as ChallengeType, accepted: true })),
+      game.hostScore,
+      game.guestScore
+    );
+
+    // Award points
+    const newHostScore = isHost ? game.hostScore + challengePoints.envidoPoints : game.hostScore;
+    const newGuestScore = !isHost ? game.guestScore + challengePoints.envidoPoints : game.guestScore;
+
+    await prisma.game.update({
+      where: { id: gameId },
+      data: {
+        hostScore: newHostScore,
+        guestScore: newGuestScore,
+      },
+    });
+
+    // Check if game won
+    if (newHostScore >= 30 || newGuestScore >= 30) {
+      await this.completeGame(gameId);
+    }
+
+    return {
+      hostEnvido,
+      guestEnvido,
+      winnerId: envidoWinnerId,
+      pointsAwarded: challengePoints.envidoPoints,
+      game: await this.getGameState(gameId),
+    };
   }
 }
 

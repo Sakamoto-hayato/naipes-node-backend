@@ -7,6 +7,7 @@ exports.GameService = void 0;
 const database_1 = __importDefault(require("../../config/database"));
 const error_middleware_1 = require("../../shared/middleware/error.middleware");
 const card_values_1 = require("./constants/card-values");
+const challenge_values_1 = require("./constants/challenge-values");
 class GameService {
     async createGame(data) {
         const { hostUserId, guestUserId, bet, level, isBot } = data;
@@ -403,7 +404,12 @@ class GameService {
                 },
                 rounds: {
                     include: {
-                        tricks: { orderBy: { trickNumber: 'asc' } },
+                        tricks: {
+                            include: {
+                                challenges: { orderBy: { createdAt: 'asc' } },
+                            },
+                            orderBy: { trickNumber: 'asc' },
+                        },
                     },
                     orderBy: { roundNumber: 'desc' },
                 },
@@ -443,6 +449,203 @@ class GameService {
             take: 50,
         });
         return games;
+    }
+    async makeChallenge(data) {
+        const { gameId, userId, type } = data;
+        const game = await this.getGameState(gameId);
+        if (!game) {
+            throw new error_middleware_1.AppError('Game not found', 404, 'GAME_NOT_FOUND');
+        }
+        if (game.status !== 'active') {
+            throw new error_middleware_1.AppError('Game is not active', 400, 'GAME_NOT_ACTIVE');
+        }
+        if (game.turnUserId !== userId) {
+            throw new error_middleware_1.AppError('Not your turn', 400, 'NOT_YOUR_TURN');
+        }
+        const currentRound = game.rounds[game.rounds.length - 1];
+        if (!currentRound) {
+            throw new error_middleware_1.AppError('No active round', 400, 'NO_ACTIVE_ROUND');
+        }
+        const currentTrick = currentRound.tricks.find(t => !t.finishedAt);
+        if (!currentTrick) {
+            throw new error_middleware_1.AppError('No active trick', 400, 'NO_ACTIVE_TRICK');
+        }
+        const existingChallenges = (currentTrick.challenges || []).map(c => ({
+            type: c.type,
+            accepted: c.accepted
+        }));
+        const validation = (0, challenge_values_1.canMakeChallenge)(type, existingChallenges, currentTrick.trickNumber);
+        if (!validation.allowed) {
+            throw new error_middleware_1.AppError(validation.reason || 'Challenge not allowed', 400, 'CHALLENGE_NOT_ALLOWED');
+        }
+        const challenge = await database_1.default.challenge.create({
+            data: {
+                trickId: currentTrick.id,
+                type,
+                userId,
+                accepted: null,
+            },
+        });
+        return {
+            challenge,
+            game: await this.getGameState(gameId),
+        };
+    }
+    async respondToChallenge(data) {
+        const { gameId, userId, challengeId, accepted, raiseType } = data;
+        const challenge = await database_1.default.challenge.findUnique({
+            where: { id: challengeId },
+            include: {
+                trick: {
+                    include: {
+                        round: {
+                            include: {
+                                game: true,
+                            },
+                        },
+                        challenges: true,
+                    },
+                },
+            },
+        });
+        if (!challenge) {
+            throw new error_middleware_1.AppError('Challenge not found', 404, 'CHALLENGE_NOT_FOUND');
+        }
+        if (challenge.trick.round.game.id !== gameId) {
+            throw new error_middleware_1.AppError('Challenge not in this game', 400, 'INVALID_CHALLENGE');
+        }
+        if (challenge.accepted !== null) {
+            throw new error_middleware_1.AppError('Challenge already responded to', 400, 'CHALLENGE_ALREADY_RESPONDED');
+        }
+        if (challenge.userId === userId) {
+            throw new error_middleware_1.AppError('Cannot respond to your own challenge', 400, 'CANNOT_RESPOND_OWN_CHALLENGE');
+        }
+        const game = challenge.trick.round.game;
+        if (game.hostUserId !== userId && game.guestUserId !== userId) {
+            throw new error_middleware_1.AppError('You are not in this game', 403, 'FORBIDDEN');
+        }
+        if (raiseType) {
+            const mappedChallenges = challenge.trick.challenges.map(c => ({
+                type: c.type,
+                accepted: c.accepted
+            }));
+            const validation = (0, challenge_values_1.canMakeChallenge)(raiseType, mappedChallenges, challenge.trick.trickNumber);
+            if (!validation.allowed) {
+                throw new error_middleware_1.AppError(validation.reason || 'Invalid raise', 400, 'INVALID_RAISE');
+            }
+            await database_1.default.challenge.update({
+                where: { id: challengeId },
+                data: { accepted: true },
+            });
+            const raiseChallenge = await database_1.default.challenge.create({
+                data: {
+                    trickId: challenge.trickId,
+                    type: raiseType,
+                    userId,
+                    accepted: null,
+                },
+            });
+            return {
+                challenge: raiseChallenge,
+                game: await this.getGameState(gameId),
+            };
+        }
+        await database_1.default.challenge.update({
+            where: { id: challengeId },
+            data: { accepted },
+        });
+        if (!accepted) {
+            await this.processRejectedChallenge(challenge.trick.round.id, challenge.type, challenge.userId);
+        }
+        return {
+            challenge: { ...challenge, accepted },
+            game: await this.getGameState(gameId),
+        };
+    }
+    async processRejectedChallenge(roundId, challengeType, challengerUserId) {
+        const round = await database_1.default.round.findUnique({
+            where: { id: roundId },
+            include: { game: true },
+        });
+        if (!round) {
+            return;
+        }
+        const game = round.game;
+        const isHost = game.hostUserId === challengerUserId;
+        const category = (0, challenge_values_1.getChallengeCategory)(challengeType);
+        const challengePoints = (0, challenge_values_1.calculateChallengePoints)([{ type: challengeType, accepted: false }], game.hostScore, game.guestScore);
+        let pointsToAward = 1;
+        if (category === challenge_values_1.ChallengeCategory.TRUCO) {
+            if (challengeType === challenge_values_1.ChallengeType.TRUCO)
+                pointsToAward = 1;
+            else if (challengeType === challenge_values_1.ChallengeType.RETRUCO)
+                pointsToAward = 2;
+            else if (challengeType === challenge_values_1.ChallengeType.VALE_CUATRO)
+                pointsToAward = 3;
+        }
+        else if (category === challenge_values_1.ChallengeCategory.ENVIDO) {
+            pointsToAward = challengePoints.envidoPoints;
+        }
+        const newHostScore = isHost ? game.hostScore + pointsToAward : game.hostScore;
+        const newGuestScore = !isHost ? game.guestScore + pointsToAward : game.guestScore;
+        await database_1.default.game.update({
+            where: { id: game.id },
+            data: {
+                hostScore: newHostScore,
+                guestScore: newGuestScore,
+            },
+        });
+        if (newHostScore >= 30 || newGuestScore >= 30) {
+            await this.completeGame(game.id);
+        }
+    }
+    async calculateEnvidoWinner(gameId) {
+        const game = await this.getGameState(gameId);
+        if (!game) {
+            throw new error_middleware_1.AppError('Game not found', 404, 'GAME_NOT_FOUND');
+        }
+        const currentRound = game.rounds[game.rounds.length - 1];
+        if (!currentRound) {
+            throw new error_middleware_1.AppError('No active round', 400, 'NO_ACTIVE_ROUND');
+        }
+        const currentTrick = currentRound.tricks[0];
+        if (!currentTrick) {
+            throw new error_middleware_1.AppError('No trick found', 400, 'NO_TRICK_FOUND');
+        }
+        const envidoChallenges = currentTrick.challenges?.filter(c => (0, challenge_values_1.getChallengeCategory)(c.type) === challenge_values_1.ChallengeCategory.ENVIDO && c.accepted === true) || [];
+        if (envidoChallenges.length === 0) {
+            throw new error_middleware_1.AppError('No accepted envido challenges', 400, 'NO_ENVIDO_CHALLENGES');
+        }
+        const hostCards = currentRound.hostCards;
+        const guestCards = currentRound.guestCards;
+        const hostEnvido = (0, card_values_1.calculateEnvidoScore)(hostCards);
+        const guestEnvido = (0, card_values_1.calculateEnvidoScore)(guestCards);
+        const envidoWinnerId = hostEnvido > guestEnvido
+            ? game.hostUserId
+            : guestEnvido > hostEnvido
+                ? game.guestUserId
+                : currentRound.handUserId;
+        const isHost = envidoWinnerId === game.hostUserId;
+        const challengePoints = (0, challenge_values_1.calculateChallengePoints)(envidoChallenges.map(c => ({ type: c.type, accepted: true })), game.hostScore, game.guestScore);
+        const newHostScore = isHost ? game.hostScore + challengePoints.envidoPoints : game.hostScore;
+        const newGuestScore = !isHost ? game.guestScore + challengePoints.envidoPoints : game.guestScore;
+        await database_1.default.game.update({
+            where: { id: gameId },
+            data: {
+                hostScore: newHostScore,
+                guestScore: newGuestScore,
+            },
+        });
+        if (newHostScore >= 30 || newGuestScore >= 30) {
+            await this.completeGame(gameId);
+        }
+        return {
+            hostEnvido,
+            guestEnvido,
+            winnerId: envidoWinnerId,
+            pointsAwarded: challengePoints.envidoPoints,
+            game: await this.getGameState(gameId),
+        };
     }
 }
 exports.GameService = GameService;
