@@ -13,5 +13,8 @@ router.post('/:id/start', game_controller_1.default.start);
 router.post('/:id/play', game_controller_1.default.playCard);
 router.get('/:id', game_controller_1.default.getGame);
 router.get('/my-games', game_controller_1.default.getMyGames);
+router.post('/:id/challenge', game_controller_1.default.makeChallenge);
+router.post('/:id/challenge/:challengeId/respond', game_controller_1.default.respondToChallenge);
+router.post('/:id/calculate-envido', game_controller_1.default.calculateEnvido);
 exports.default = router;
 //# sourceMappingURL=game.routes.js.map

@@ -14,4 +14,9 @@ router.post('/:id/play', gameController.playCard);
 router.get('/:id', gameController.getGame);
 router.get('/my-games', gameController.getMyGames);
 
+// Challenge management
+router.post('/:id/challenge', gameController.makeChallenge);
+router.post('/:id/challenge/:challengeId/respond', gameController.respondToChallenge);
+router.post('/:id/calculate-envido', gameController.calculateEnvido);
+
 export default router;

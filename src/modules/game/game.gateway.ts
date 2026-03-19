@@ -94,17 +94,17 @@ export class GameGateway {
       });
 
       // Challenge events (Truco, Envido, etc.)
-      socket.on('send-challenge', async (data: { gameId: string; type: string; value?: number }) => {
+      socket.on('send-challenge', async (data: { gameId: string; type: string }) => {
         try {
-          await this.handleChallenge(socket, data.gameId, data.type, data.value);
+          await this.handleChallenge(socket, data.gameId, data.type);
         } catch (error) {
           this.handleError(socket, 'challenge-error', error);
         }
       });
 
-      socket.on('respond-challenge', async (data: { gameId: string; accepted: boolean }) => {
+      socket.on('respond-challenge', async (data: { gameId: string; challengeId: string; accepted: boolean; raiseType?: string }) => {
         try {
-          await this.handleChallengeResponse(socket, data.gameId, data.accepted);
+          await this.handleChallengeResponse(socket, data.gameId, data.challengeId, data.accepted, data.raiseType);
         } catch (error) {
           this.handleError(socket, 'challenge-response-error', error);
         }
@@ -263,41 +263,67 @@ export class GameGateway {
     });
   }
 
-  // Handle challenge (Truco, Envido, etc.) - Placeholder for future implementation
-  private async handleChallenge(socket: AuthenticatedSocket, gameId: string, type: string, value?: number) {
+  // Handle challenge (Truco, Envido, etc.)
+  private async handleChallenge(socket: AuthenticatedSocket, gameId: string, type: string) {
     if (!socket.userId) {
       throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
     }
 
-    logger.info(`Challenge sent: ${type} in game ${gameId} by user ${socket.userId}`, { value });
+    logger.info(`Challenge sent: ${type} in game ${gameId} by user ${socket.userId}`);
 
-    // Notify opponent
-    socket.to(`game:${gameId}`).emit('challenge-received', {
+    // Create challenge via service
+    const result = await gameService.makeChallenge({
+      gameId,
       userId: socket.userId,
-      type,
-      value,
-      timestamp: new Date().toISOString(),
+      type: type as any,
     });
 
-    // TODO: Implement challenge logic in game service
+    // Notify all players in the room
+    this.notifyGameRoom(gameId, 'challenge-received', {
+      challenge: result.challenge,
+      game: result.game,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // Handle challenge response
-  private async handleChallengeResponse(socket: AuthenticatedSocket, gameId: string, accepted: boolean) {
+  private async handleChallengeResponse(
+    socket: AuthenticatedSocket,
+    gameId: string,
+    challengeId: string,
+    accepted: boolean,
+    raiseType?: string
+  ) {
     if (!socket.userId) {
       throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
     }
 
     logger.info(`Challenge response: ${accepted ? 'accepted' : 'rejected'} in game ${gameId} by user ${socket.userId}`);
 
-    // Notify opponent
-    this.notifyGameRoom(gameId, 'challenge-response', {
+    // Respond to challenge via service
+    const result = await gameService.respondToChallenge({
+      gameId,
       userId: socket.userId,
+      challengeId,
       accepted,
+      raiseType: raiseType as any,
+    });
+
+    // Notify all players
+    this.notifyGameRoom(gameId, 'challenge-response', {
+      challenge: result.challenge,
+      game: result.game,
       timestamp: new Date().toISOString(),
     });
 
-    // TODO: Implement challenge response logic in game service
+    // If challenge was rejected or accepted, may need to check game state
+    if (!accepted || (accepted && !raiseType)) {
+      // Challenge resolved, send updated game state
+      this.notifyGameRoom(gameId, 'game-state', {
+        game: result.game,
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 
   // Helper: Notify all users in a game room

@@ -75,7 +75,7 @@ class GameGateway {
             });
             socket.on('send-challenge', async (data) => {
                 try {
-                    await this.handleChallenge(socket, data.gameId, data.type, data.value);
+                    await this.handleChallenge(socket, data.gameId, data.type);
                 }
                 catch (error) {
                     this.handleError(socket, 'challenge-error', error);
@@ -83,7 +83,7 @@ class GameGateway {
             });
             socket.on('respond-challenge', async (data) => {
                 try {
-                    await this.handleChallengeResponse(socket, data.gameId, data.accepted);
+                    await this.handleChallengeResponse(socket, data.gameId, data.challengeId, data.accepted, data.raiseType);
                 }
                 catch (error) {
                     this.handleError(socket, 'challenge-response-error', error);
@@ -197,28 +197,45 @@ class GameGateway {
             timestamp: new Date().toISOString(),
         });
     }
-    async handleChallenge(socket, gameId, type, value) {
+    async handleChallenge(socket, gameId, type) {
         if (!socket.userId) {
             throw new error_middleware_1.AppError('User not authenticated', 401, 'UNAUTHORIZED');
         }
-        logger_1.default.info(`Challenge sent: ${type} in game ${gameId} by user ${socket.userId}`, { value });
-        socket.to(`game:${gameId}`).emit('challenge-received', {
+        logger_1.default.info(`Challenge sent: ${type} in game ${gameId} by user ${socket.userId}`);
+        const result = await game_service_1.default.makeChallenge({
+            gameId,
             userId: socket.userId,
-            type,
-            value,
+            type: type,
+        });
+        this.notifyGameRoom(gameId, 'challenge-received', {
+            challenge: result.challenge,
+            game: result.game,
             timestamp: new Date().toISOString(),
         });
     }
-    async handleChallengeResponse(socket, gameId, accepted) {
+    async handleChallengeResponse(socket, gameId, challengeId, accepted, raiseType) {
         if (!socket.userId) {
             throw new error_middleware_1.AppError('User not authenticated', 401, 'UNAUTHORIZED');
         }
         logger_1.default.info(`Challenge response: ${accepted ? 'accepted' : 'rejected'} in game ${gameId} by user ${socket.userId}`);
-        this.notifyGameRoom(gameId, 'challenge-response', {
+        const result = await game_service_1.default.respondToChallenge({
+            gameId,
             userId: socket.userId,
+            challengeId,
             accepted,
+            raiseType: raiseType,
+        });
+        this.notifyGameRoom(gameId, 'challenge-response', {
+            challenge: result.challenge,
+            game: result.game,
             timestamp: new Date().toISOString(),
         });
+        if (!accepted || (accepted && !raiseType)) {
+            this.notifyGameRoom(gameId, 'game-state', {
+                game: result.game,
+                timestamp: new Date().toISOString(),
+            });
+        }
     }
     notifyGameRoom(gameId, event, data) {
         this.io.of('/game').to(`game:${gameId}`).emit(event, data);

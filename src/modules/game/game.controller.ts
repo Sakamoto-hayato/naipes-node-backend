@@ -89,6 +89,77 @@ export class GameController {
 
     return successResponse(res, games, 'Games retrieved');
   });
+
+  // POST /api/game/:id/challenge - Make a challenge
+  makeChallenge = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError('Game ID is required', 400, 'MISSING_GAME_ID');
+    }
+
+    const { type } = req.body;
+    if (!type) {
+      throw new AppError('Challenge type is required', 400, 'MISSING_CHALLENGE_TYPE');
+    }
+
+    const result = await gameService.makeChallenge({
+      gameId: id,
+      userId,
+      type,
+    });
+
+    return createdResponse(res, result, 'Challenge created');
+  });
+
+  // POST /api/game/:id/challenge/:challengeId/respond - Respond to challenge
+  respondToChallenge = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    const { id, challengeId } = req.params;
+    if (!id || !challengeId) {
+      throw new AppError('Game ID and Challenge ID are required', 400, 'MISSING_IDS');
+    }
+
+    const { accepted, raiseType } = req.body;
+    if (accepted === undefined) {
+      throw new AppError('Accepted field is required', 400, 'MISSING_ACCEPTED');
+    }
+
+    const result = await gameService.respondToChallenge({
+      gameId: id,
+      userId,
+      challengeId,
+      accepted,
+      raiseType,
+    });
+
+    return successResponse(res, result, 'Challenge response recorded');
+  });
+
+  // POST /api/game/:id/calculate-envido - Calculate Envido winner
+  calculateEnvido = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError('Game ID is required', 400, 'MISSING_GAME_ID');
+    }
+
+    const result = await gameService.calculateEnvidoWinner(id);
+
+    return successResponse(res, result, 'Envido calculated');
+  });
 }
 
 export default new GameController();
