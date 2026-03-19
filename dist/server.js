@@ -16,6 +16,7 @@ const email_1 = require("./config/email");
 const error_middleware_1 = require("./shared/middleware/error.middleware");
 const auth_routes_1 = __importDefault(require("./modules/auth/auth.routes"));
 const game_routes_1 = __importDefault(require("./modules/game/game.routes"));
+const game_gateway_1 = __importDefault(require("./modules/game/game.gateway"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 exports.app = app;
@@ -100,6 +101,8 @@ async function startServer() {
         await (0, database_1.connectDatabase)();
         logger_1.default.info('Database connected successfully');
         await (0, email_1.verifyEmailConnection)();
+        new game_gateway_1.default(io);
+        logger_1.default.info('Game WebSocket gateway initialized');
         server.listen(PORT, () => {
             console.log('========================================');
             console.log('🎮 Naipes Negros Backend Server');
@@ -119,6 +122,15 @@ async function startServer() {
             console.log('  POST /api/auth/reset-password - Reset password');
             console.log('  GET  /api/auth/confirm-email - Confirm email');
             console.log('  POST /api/auth/resend-confirmation - Resend confirmation');
+            console.log('  POST /api/game/create - Create game');
+            console.log('  POST /api/game/:id/start - Start game');
+            console.log('  POST /api/game/:id/play - Play card');
+            console.log('  GET  /api/game/:id - Get game state');
+            console.log('  GET  /api/game/my-games - Get my games');
+            console.log('========================================');
+            console.log('WebSocket Events (namespace: /game):');
+            console.log('  join-game, leave-game, play-card, start-game');
+            console.log('  get-game-state, send-challenge, respond-challenge');
             console.log('========================================');
         });
     }

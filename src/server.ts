@@ -17,6 +17,9 @@ import { errorHandler, notFoundHandler } from './shared/middleware/error.middlew
 import authRoutes from './modules/auth/auth.routes';
 import gameRoutes from './modules/game/game.routes';
 
+// WebSocket Gateway
+import GameGateway from './modules/game/game.gateway';
+
 // Load environment variables
 dotenv.config();
 
@@ -131,6 +134,10 @@ async function startServer() {
     // Verify email connection
     await verifyEmailConnection();
 
+    // Initialize WebSocket Game Gateway
+    new GameGateway(io);
+    logger.info('Game WebSocket gateway initialized');
+
     // Start server
     server.listen(PORT, () => {
       console.log('========================================');
@@ -151,6 +158,15 @@ async function startServer() {
       console.log('  POST /api/auth/reset-password - Reset password');
       console.log('  GET  /api/auth/confirm-email - Confirm email');
       console.log('  POST /api/auth/resend-confirmation - Resend confirmation');
+      console.log('  POST /api/game/create - Create game');
+      console.log('  POST /api/game/:id/start - Start game');
+      console.log('  POST /api/game/:id/play - Play card');
+      console.log('  GET  /api/game/:id - Get game state');
+      console.log('  GET  /api/game/my-games - Get my games');
+      console.log('========================================');
+      console.log('WebSocket Events (namespace: /game):');
+      console.log('  join-game, leave-game, play-card, start-game');
+      console.log('  get-game-state, send-challenge, respond-challenge');
       console.log('========================================');
     });
   } catch (error) {
