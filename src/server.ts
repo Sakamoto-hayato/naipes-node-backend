@@ -16,6 +16,7 @@ import { errorHandler, notFoundHandler } from './shared/middleware/error.middlew
 // Routes
 import authRoutes from './modules/auth/auth.routes';
 import gameRoutes from './modules/game/game.routes';
+import loungeRoutes from './modules/lounge/lounge.routes';
 
 // WebSocket Gateway
 import GameGateway from './modules/game/game.gateway';
@@ -94,6 +95,7 @@ app.get('/api', (_req, res) => {
 // Register module routes
 app.use('/api/auth', authRoutes);
 app.use('/api/game', gameRoutes);
+app.use('/api/lounge', loungeRoutes);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {

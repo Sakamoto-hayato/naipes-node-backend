@@ -16,6 +16,7 @@ const email_1 = require("./config/email");
 const error_middleware_1 = require("./shared/middleware/error.middleware");
 const auth_routes_1 = __importDefault(require("./modules/auth/auth.routes"));
 const game_routes_1 = __importDefault(require("./modules/game/game.routes"));
+const lounge_routes_1 = __importDefault(require("./modules/lounge/lounge.routes"));
 const game_gateway_1 = __importDefault(require("./modules/game/game.gateway"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -79,6 +80,7 @@ app.get('/api', (_req, res) => {
 });
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/game', game_routes_1.default);
+app.use('/api/lounge', lounge_routes_1.default);
 io.on('connection', (socket) => {
     logger_1.default.info(`Client connected: ${socket.id}`);
     socket.on('disconnect', () => {
