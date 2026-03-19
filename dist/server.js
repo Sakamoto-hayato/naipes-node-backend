@@ -19,6 +19,9 @@ const game_routes_1 = __importDefault(require("./modules/game/game.routes"));
 const lounge_routes_1 = __importDefault(require("./modules/lounge/lounge.routes"));
 const user_routes_1 = __importDefault(require("./modules/user/user.routes"));
 const coin_routes_1 = __importDefault(require("./modules/coin/coin.routes"));
+const ranking_routes_1 = __importDefault(require("./modules/ranking/ranking.routes"));
+const message_routes_1 = __importDefault(require("./modules/message/message.routes"));
+const withdrawal_routes_1 = __importDefault(require("./modules/withdrawal/withdrawal.routes"));
 const game_gateway_1 = __importDefault(require("./modules/game/game.gateway"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -85,6 +88,9 @@ app.use('/api/game', game_routes_1.default);
 app.use('/api/lounge', lounge_routes_1.default);
 app.use('/api/users', user_routes_1.default);
 app.use('/api/coins', coin_routes_1.default);
+app.use('/api/ranking', ranking_routes_1.default);
+app.use('/api/messages', message_routes_1.default);
+app.use('/api/withdrawals', withdrawal_routes_1.default);
 io.on('connection', (socket) => {
     logger_1.default.info(`Client connected: ${socket.id}`);
     socket.on('disconnect', () => {

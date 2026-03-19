@@ -19,6 +19,9 @@ import gameRoutes from './modules/game/game.routes';
 import loungeRoutes from './modules/lounge/lounge.routes';
 import userRoutes from './modules/user/user.routes';
 import coinRoutes from './modules/coin/coin.routes';
+import rankingRoutes from './modules/ranking/ranking.routes';
+import messageRoutes from './modules/message/message.routes';
+import withdrawalRoutes from './modules/withdrawal/withdrawal.routes';
 
 // WebSocket Gateway
 import GameGateway from './modules/game/game.gateway';
@@ -100,6 +103,9 @@ app.use('/api/game', gameRoutes);
 app.use('/api/lounge', loungeRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/coins', coinRoutes);
+app.use('/api/ranking', rankingRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/withdrawals', withdrawalRoutes);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
