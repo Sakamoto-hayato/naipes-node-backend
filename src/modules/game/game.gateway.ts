@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import logger from '../../config/logger';
 import gameService from './game.service';
+import botService from './services/bot.service';
 import { AppError } from '../../shared/middleware/error.middleware';
 
 interface AuthenticatedSocket extends Socket {
@@ -108,6 +109,15 @@ export class GameGateway {
           await this.handleChallengeResponse(socket, data.gameId, data.challengeId, data.accepted, data.raiseType);
         } catch (error) {
           this.handleError(socket, 'challenge-response-error', error);
+        }
+      });
+
+      // In-game chat message
+      socket.on('chat-message', async (data: { gameId: string; text: string }) => {
+        try {
+          await this.handleChatMessage(socket, data.gameId, data.text);
+        } catch (error) {
+          this.handleError(socket, 'chat-error', error);
         }
       });
 
@@ -268,6 +278,9 @@ export class GameGateway {
         timestamp: new Date().toISOString(),
       });
     }
+
+    // Trigger bot turn if applicable
+    await this.triggerBotTurnIfNeeded(gameId);
   }
 
   // Handle start game
@@ -291,6 +304,9 @@ export class GameGateway {
         timestamp: new Date().toISOString(),
       });
     }
+
+    // Trigger bot turn if applicable
+    await this.triggerBotTurnIfNeeded(gameId);
   }
 
   // Handle get game state
@@ -379,7 +395,36 @@ export class GameGateway {
           timestamp: new Date().toISOString(),
         });
       }
+
+      // Trigger bot turn if applicable
+      await this.triggerBotTurnIfNeeded(gameId);
     }
+  }
+
+  // Handle chat message
+  private async handleChatMessage(socket: AuthenticatedSocket, gameId: string, text: string) {
+    if (!socket.userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    if (!text || text.trim().length === 0) return;
+
+    // Verify user is in the game
+    const game = await gameService.getGameState(gameId);
+    if (game.hostUserId !== socket.userId && game.guestUserId !== socket.userId) {
+      throw new AppError('You are not in this game', 403, 'FORBIDDEN');
+    }
+
+    // Check if user has chat enabled (fetch user settings)
+    const user = game.hostUserId === socket.userId ? game.hostUser : game.guestUser;
+
+    // Broadcast to all players in game room
+    this.notifyGameRoom(gameId, 'chat-message', {
+      userId: socket.userId,
+      username: user?.username || 'Unknown',
+      text: text.trim().substring(0, 200), // Limit message length
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // Get user's active game (for reconnection)
@@ -397,6 +442,41 @@ export class GameGateway {
       await this.handleJoinGame(socket, activeGame.id);
     } else {
       socket.emit('no-active-game', { timestamp: new Date().toISOString() });
+    }
+  }
+
+  // Trigger bot turn if the game is a bot game and it's the bot's turn
+  private async triggerBotTurnIfNeeded(gameId: string) {
+    try {
+      const game = await gameService.getGameState(gameId);
+      if (!game || !game.isBot || game.status !== 'active') return;
+
+      // The bot is always the guest user
+      const botUserId = game.guestUserId;
+      if (!botUserId || game.turnUserId !== botUserId) return;
+
+      // Execute bot turn (async — will trigger game state updates)
+      const result = await botService.executeBotTurn(gameId, botUserId);
+
+      // After bot acts, send updated state to human player
+      const updatedGame = await gameService.getGameState(gameId);
+      this.notifyGameRoom(gameId, 'game-state', {
+        game: updatedGame,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (updatedGame.status === 'finished') {
+        this.notifyGameRoom(gameId, 'game-finished', {
+          winnerId: updatedGame.userWonId,
+          game: updatedGame,
+          timestamp: new Date().toISOString(),
+        });
+      } else if (updatedGame.turnUserId === botUserId) {
+        // Bot might need another turn (e.g., after challenge accepted)
+        await this.triggerBotTurnIfNeeded(gameId);
+      }
+    } catch (error) {
+      logger.error(`Bot trigger error for game ${gameId}:`, error);
     }
   }
 
