@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { AppError } from '../../shared/middleware/error.middleware';
 import { dealCards, compareCards, isValidCard, calculateEnvidoScore } from './constants/card-values';
+import logger from '../../config/logger';
 import {
   ChallengeType,
   canMakeChallenge,
@@ -522,6 +523,16 @@ export class GameService {
         },
       }),
     ]);
+
+    // If tournament game, record round result and advance bracket
+    if (game.isTournament) {
+      try {
+        const tournamentService = (await import('../tournament/tournament.service')).default;
+        await tournamentService.recordRoundResult(gameId, winnerId);
+      } catch (err) {
+        logger.error('Failed to record tournament result:', err);
+      }
+    }
 
     return this.getGameState(gameId);
   }
