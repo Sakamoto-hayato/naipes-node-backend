@@ -935,6 +935,107 @@ export class GameService {
     };
   }
 
+  // Go to Mazo — forfeit the current round
+  async goToMazo(gameId: string, userId: string): Promise<any> {
+    const game = await this.getGameState(gameId);
+
+    if (!game || game.status !== 'active') {
+      throw new AppError('Game is not active', 400, 'GAME_NOT_ACTIVE');
+    }
+
+    if (game.hostUserId !== userId && game.guestUserId !== userId) {
+      throw new AppError('You are not in this game', 403, 'FORBIDDEN');
+    }
+
+    // Find active round
+    const activeRound = game.rounds.find((r: any) => !r.finishedAt);
+    if (!activeRound) {
+      throw new AppError('No active round', 400, 'NO_ACTIVE_ROUND');
+    }
+
+    // The opponent wins the round
+    const opponentId = game.hostUserId === userId ? game.guestUserId! : game.hostUserId;
+    const isHostWinner = opponentId === game.hostUserId;
+
+    // Calculate points: check if there are accepted Truco challenges
+    let pointsToAward = 1;
+    for (const trick of activeRound.tricks) {
+      if (trick.challenges) {
+        for (const c of trick.challenges) {
+          const cat = getChallengeCategory(c.type as ChallengeType);
+          if (cat === ChallengeCategory.TRUCO && c.accepted === true) {
+            const result = calculateChallengePoints(
+              [{type: c.type as ChallengeType, accepted: true}],
+              game.hostScore,
+              game.guestScore
+            );
+            pointsToAward = Math.max(pointsToAward, result.trucoPoints);
+          }
+        }
+      }
+    }
+
+    // If mazo is given in response to a pending Truco challenge (not yet accepted/rejected),
+    // the challenger gets the previous level points (same as rejection)
+    for (const trick of activeRound.tricks) {
+      if (trick.challenges) {
+        const pending = trick.challenges.find((c: any) => c.accepted === null);
+        if (pending) {
+          const cat = getChallengeCategory(pending.type as ChallengeType);
+          if (cat === ChallengeCategory.TRUCO) {
+            // Same as rejection
+            if (pending.type === 'TRUCO') pointsToAward = Math.max(pointsToAward, 1);
+            else if (pending.type === 'RETRUCO') pointsToAward = Math.max(pointsToAward, 2);
+            else if (pending.type === 'VALECUATRO') pointsToAward = Math.max(pointsToAward, 3);
+          }
+          // Mark pending challenge as rejected
+          await prisma.challenge.update({
+            where: {id: pending.id},
+            data: {accepted: false},
+          });
+        }
+      }
+    }
+
+    // Award points to opponent
+    const newHostScore = isHostWinner ? game.hostScore + pointsToAward : game.hostScore;
+    const newGuestScore = !isHostWinner ? game.guestScore + pointsToAward : game.guestScore;
+
+    // Finish the round
+    await prisma.round.update({
+      where: {id: activeRound.id},
+      data: {finishedAt: new Date()},
+    });
+
+    // Finish all incomplete tricks in the round
+    await prisma.trick.updateMany({
+      where: {roundId: activeRound.id, finishedAt: null},
+      data: {finishedAt: new Date()},
+    });
+
+    // Update scores
+    await prisma.game.update({
+      where: {id: game.id},
+      data: {
+        hostScore: newHostScore,
+        guestScore: newGuestScore,
+      },
+    });
+
+    // Check if game won
+    if (newHostScore >= 30 || newGuestScore >= 30) {
+      await this.completeGame(game.id);
+    } else {
+      // Create next round
+      const nextHandUserId = activeRound.handUserId === game.hostUserId
+        ? game.guestUserId!
+        : game.hostUserId;
+      await this.createRound(game.id, nextHandUserId);
+    }
+
+    return this.getGameState(gameId);
+  }
+
   // Calculate and award Envido points (manual endpoint — kept for backward compatibility)
   async calculateEnvidoWinner(gameId: string): Promise<any> {
     const game = await this.getGameState(gameId);

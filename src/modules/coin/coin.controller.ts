@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import coinService from './coin.service';
+import iapService, { Platform } from '../../shared/services/iap.service';
 import { successResponse, createdResponse } from '../../shared/utils/response';
 import { asyncHandler, AppError } from '../../shared/middleware/error.middleware';
 
@@ -78,6 +79,42 @@ export class CoinController {
 
     const transaction = await coinService.getTransactionById(id, userId);
     return successResponse(res, transaction, 'Transaction retrieved successfully');
+  });
+
+  // POST /api/coins/verify-purchase - Verify IAP receipt and grant coins
+  verifyAndPurchase = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    const { platform, productId, purchaseToken, transactionId, packageId } = req.body;
+
+    if (!platform || !productId || !purchaseToken || !packageId) {
+      throw new AppError('platform, productId, purchaseToken, and packageId are required', 400, 'MISSING_FIELDS');
+    }
+
+    // Verify the purchase with Google/Apple
+    const verification = await iapService.verifyPurchase({
+      platform: platform as Platform,
+      productId,
+      purchaseToken,
+      transactionId,
+    });
+
+    if (!verification.valid) {
+      throw new AppError(verification.error || 'Purchase verification failed', 400, 'INVALID_PURCHASE');
+    }
+
+    // Grant coins via existing purchase flow
+    const result = await coinService.purchaseCoinPackage({
+      packageId,
+      userId,
+      paymentMethod: platform,
+      externalId: verification.transactionId,
+    });
+
+    return createdResponse(res, result, 'Purchase verified and coins granted');
   });
 
   // ========== Admin Routes ==========

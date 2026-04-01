@@ -113,6 +113,15 @@ export class GameGateway {
         }
       });
 
+      // Go to Mazo (forfeit current round)
+      socket.on('go-mazo', async (data: { gameId: string }) => {
+        try {
+          await this.handleGoMazo(socket, data.gameId);
+        } catch (error) {
+          this.handleError(socket, 'mazo-error', error);
+        }
+      });
+
       // In-game chat message
       socket.on('chat-message', async (data: { gameId: string; text: string }) => {
         try {
@@ -414,6 +423,40 @@ export class GameGateway {
       // Trigger bot turn if applicable
       await this.triggerBotTurnIfNeeded(gameId);
     }
+  }
+
+  // Handle go to mazo (forfeit round)
+  private async handleGoMazo(socket: AuthenticatedSocket, gameId: string) {
+    if (!socket.userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    logger.info(`Player ${socket.userId} going to mazo in game ${gameId}`);
+
+    const updatedGame = await gameService.goToMazo(gameId, socket.userId);
+
+    // Notify all players
+    this.notifyGameRoom(gameId, 'player-mazo', {
+      userId: socket.userId,
+      game: updatedGame,
+      timestamp: new Date().toISOString(),
+    });
+
+    this.notifyGameRoom(gameId, 'game-state', {
+      game: updatedGame,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (updatedGame.status === 'finished') {
+      this.notifyGameRoom(gameId, 'game-finished', {
+        winnerId: updatedGame.userWonId,
+        game: updatedGame,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Trigger bot turn if applicable
+    await this.triggerBotTurnIfNeeded(gameId);
   }
 
   // Handle chat message

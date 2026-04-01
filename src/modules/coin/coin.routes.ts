@@ -10,6 +10,7 @@ router.get('/packages/:id', authenticate, coinController.getPackageById);
 router.post('/purchase', authenticate, coinController.purchasePackage);
 router.get('/transactions', authenticate, coinController.getTransactions);
 router.get('/transactions/:id', authenticate, coinController.getTransactionById);
+router.post('/verify-purchase', authenticate, coinController.verifyAndPurchase);
 
 // Admin routes
 router.get('/admin/packages', authenticate, requireAdmin, coinController.getAllPackages);
