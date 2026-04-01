@@ -6,6 +6,7 @@ export interface CreateLoungeGameDto {
   bet: number;
   level: number;
   playKey?: string;
+  isBot?: boolean;
 }
 
 export interface JoinLoungeGameDto {
@@ -17,7 +18,7 @@ export interface JoinLoungeGameDto {
 class LoungeService {
   // Create a game in the lounge (waiting for opponent)
   async createLoungeGame(data: CreateLoungeGameDto) {
-    const { hostUserId, bet, level, playKey } = data;
+    const { hostUserId, bet, level, playKey, isBot } = data;
 
     // Validate user exists
     const user = await prisma.user.findUnique({
@@ -28,37 +29,76 @@ class LoungeService {
       throw new AppError('User not found', 404, 'USER_NOT_FOUND');
     }
 
-    // Check if user has enough coins
-    if (user.coins < bet) {
+    // Check if user has enough coins (skip for free bot games)
+    if (bet > 0 && user.coins < bet) {
       throw new AppError('Insufficient coins', 400, 'INSUFFICIENT_COINS');
     }
 
-    // Generate play key if provided (for private games)
-    const generatedPlayKey = playKey || null;
+    // For bot games: create a bot user if none exists, then auto-assign as guest
+    if (isBot) {
+      const botUser = await this.getOrCreateBotUser();
 
-    // Create game in waiting status
+      const game = await prisma.game.create({
+        data: {
+          hostUserId,
+          guestUserId: botUser.id,
+          stake: bet,
+          level,
+          status: 'pending', // Both players present immediately
+          isBot: true,
+        },
+        include: {
+          hostUser: {
+            select: { id: true, username: true, profilePicture: true, points: true },
+          },
+          guestUser: {
+            select: { id: true, username: true, profilePicture: true, points: true },
+          },
+        },
+      });
+
+      return game;
+    }
+
+    // Normal game: wait for opponent
     const game = await prisma.game.create({
       data: {
         hostUserId,
         stake: bet,
         level,
         status: 'waiting',
-        playKey: generatedPlayKey,
+        playKey: playKey || null,
         isBot: false,
       },
       include: {
         hostUser: {
-          select: {
-            id: true,
-            username: true,
-            profilePicture: true,
-            points: true,
-          },
+          select: { id: true, username: true, profilePicture: true, points: true },
         },
       },
     });
 
     return game;
+  }
+
+  // Get or create the system bot user
+  private async getOrCreateBotUser() {
+    const BOT_EMAIL = 'bot@naipesnegros.com';
+
+    let bot = await prisma.user.findUnique({ where: { email: BOT_EMAIL } });
+
+    if (!bot) {
+      bot = await prisma.user.create({
+        data: {
+          email: BOT_EMAIL,
+          username: 'Bot',
+          password: '', // Bot cannot log in
+          enabled: true,
+          coins: 999999,
+        },
+      });
+    }
+
+    return bot;
   }
 
   // Get available games in lounge (public games only)

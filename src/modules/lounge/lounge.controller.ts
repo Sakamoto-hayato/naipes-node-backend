@@ -11,17 +11,17 @@ export class LoungeController {
       throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
     }
 
-    const { bet, level, playKey } = req.body;
+    const { bet, stake, level, playKey, isBot } = req.body;
 
-    if (!bet || !level) {
-      throw new AppError('Bet and level are required', 400, 'MISSING_FIELDS');
-    }
+    const betAmount = Number(bet || stake || 0);
+    const gameLevel = Number(level || 1);
 
     const game = await loungeService.createLoungeGame({
       hostUserId: userId,
-      bet: Number(bet),
-      level: Number(level),
+      bet: betAmount,
+      level: gameLevel,
       playKey,
+      isBot: isBot || false,
     });
 
     return createdResponse(res, game, 'Game created in lounge');
@@ -118,17 +118,15 @@ export class LoungeController {
       throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
     }
 
-    const { bet, level } = req.body;
+    const { bet, stake, level } = req.body;
+    const betAmount = Number(bet || stake || 100);
+    const gameLevel = Number(level || 1);
 
-    if (!bet || !level) {
-      throw new AppError('Bet and level are required', 400, 'MISSING_FIELDS');
+    if (!betAmount) {
+      throw new AppError('Bet amount is required', 400, 'MISSING_FIELDS');
     }
 
-    const game = await loungeService.quickMatch(
-      userId,
-      Number(bet),
-      Number(level)
-    );
+    const game = await loungeService.quickMatch(userId, betAmount, gameLevel);
 
     return successResponse(res, game, 'Quick match complete');
   });
