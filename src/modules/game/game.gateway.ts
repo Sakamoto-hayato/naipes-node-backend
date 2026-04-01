@@ -316,13 +316,29 @@ export class GameGateway {
       timestamp: new Date().toISOString(),
     });
 
-    // If challenge was rejected or accepted, may need to check game state
+    // Challenge resolved — send updated game state to all players
     if (!accepted || (accepted && !raiseType)) {
-      // Challenge resolved, send updated game state
       this.notifyGameRoom(gameId, 'game-state', {
         game: result.game,
         timestamp: new Date().toISOString(),
       });
+
+      // If envido was accepted, notify with envido result
+      if (accepted && result.envidoResult) {
+        this.notifyGameRoom(gameId, 'envido-result', {
+          ...result.envidoResult,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Check if game ended after challenge resolution
+      if (result.game.status === 'finished') {
+        this.notifyGameRoom(gameId, 'game-finished', {
+          winnerId: result.game.userWonId,
+          game: result.game,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   }
 

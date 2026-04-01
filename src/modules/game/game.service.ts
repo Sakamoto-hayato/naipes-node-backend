@@ -385,7 +385,10 @@ export class GameService {
       where: { id: roundId },
       include: {
         game: true,
-        tricks: { orderBy: { trickNumber: 'asc' } },
+        tricks: {
+          include: { challenges: true },
+          orderBy: { trickNumber: 'asc' },
+        },
       },
     });
 
@@ -419,8 +422,23 @@ export class GameService {
       roundWinnerId = round.handUserId;
     }
 
-    // Update scores (default 1 point, will be modified by challenges later)
-    const pointsToAdd = 1;
+    // Calculate points based on accepted Truco challenges in this round
+    const allTrucoChallenges: Array<{ type: ChallengeType; accepted: boolean | null }> = [];
+    for (const trick of tricks) {
+      for (const c of (trick as any).challenges || []) {
+        const cat = getChallengeCategory(c.type as ChallengeType);
+        if (cat === ChallengeCategory.TRUCO && c.accepted === true) {
+          allTrucoChallenges.push({ type: c.type as ChallengeType, accepted: true });
+        }
+      }
+    }
+
+    // Determine points: if truco challenges were accepted, use the highest accepted level
+    let pointsToAdd = 1; // default: no truco challenge
+    if (allTrucoChallenges.length > 0) {
+      const trucoResult = calculateChallengePoints(allTrucoChallenges, game.hostScore, game.guestScore);
+      pointsToAdd = trucoResult.trucoPoints;
+    }
 
     const newHostScore = roundWinnerId === game.hostUserId ? game.hostScore + pointsToAdd : game.hostScore;
     const newGuestScore = roundWinnerId === game.guestUserId ? game.guestScore + pointsToAdd : game.guestScore;
@@ -750,13 +768,26 @@ export class GameService {
       data: { accepted },
     });
 
-    // If rejected, award points immediately
+    let envidoResult = null;
+
     if (!accepted) {
+      // If rejected, award points immediately to the challenger
       await this.processRejectedChallenge(challenge.trick.round.id, challenge.type as ChallengeType, challenge.userId);
+    } else {
+      // If accepted, process accordingly
+      const category = getChallengeCategory(challenge.type as ChallengeType);
+
+      if (category === ChallengeCategory.ENVIDO) {
+        // Envido accepted: immediately calculate and award envido points
+        envidoResult = await this.processAcceptedEnvido(gameId, challenge.trick.round.id, challenge.trickId);
+      }
+      // Truco accepted: points are applied when the round completes (in completeRound)
+      // No immediate action needed — completeRound will read accepted challenges
     }
 
     return {
       challenge: { ...challenge, accepted },
+      envidoResult,
       game: await this.getGameState(gameId),
     };
   }
@@ -817,7 +848,83 @@ export class GameService {
     }
   }
 
-  // Calculate and award Envido points
+  // Process accepted Envido: calculate scores and award points immediately
+  private async processAcceptedEnvido(gameId: string, roundId: string, trickId: string) {
+    const round = await prisma.round.findUnique({
+      where: { id: roundId },
+      include: {
+        game: true,
+        tricks: {
+          include: { challenges: { orderBy: { createdAt: 'asc' } } },
+          orderBy: { trickNumber: 'asc' },
+        },
+      },
+    });
+
+    if (!round) return;
+
+    const game = round.game;
+
+    // Get the trick with envido challenges
+    const trick = round.tricks.find(t => t.id === trickId);
+    if (!trick) return;
+
+    // Get all accepted envido challenges in this trick
+    const envidoChallenges = (trick.challenges || []).filter(
+      c => getChallengeCategory(c.type as ChallengeType) === ChallengeCategory.ENVIDO && c.accepted === true
+    );
+
+    if (envidoChallenges.length === 0) return;
+
+    // Calculate envido scores from each player's cards
+    const hostCards = round.hostCards as string[];
+    const guestCards = round.guestCards as string[];
+
+    const hostEnvido = calculateEnvidoScore(hostCards);
+    const guestEnvido = calculateEnvidoScore(guestCards);
+
+    // Determine winner (tie goes to hand user)
+    const envidoWinnerId = hostEnvido > guestEnvido
+      ? game.hostUserId
+      : guestEnvido > hostEnvido
+        ? game.guestUserId
+        : round.handUserId;
+
+    const isHost = envidoWinnerId === game.hostUserId;
+
+    // Calculate total envido points at stake
+    const challengePoints = calculateChallengePoints(
+      envidoChallenges.map(c => ({ type: c.type as ChallengeType, accepted: true })),
+      game.hostScore,
+      game.guestScore
+    );
+
+    // Award points
+    const newHostScore = isHost ? game.hostScore + challengePoints.envidoPoints : game.hostScore;
+    const newGuestScore = !isHost ? game.guestScore + challengePoints.envidoPoints : game.guestScore;
+
+    await prisma.game.update({
+      where: { id: game.id },
+      data: {
+        hostScore: newHostScore,
+        guestScore: newGuestScore,
+      },
+    });
+
+    // Check if game won after envido
+    if (newHostScore >= 30 || newGuestScore >= 30) {
+      await this.completeGame(game.id);
+    }
+
+    return {
+      hostEnvido,
+      guestEnvido,
+      winnerId: envidoWinnerId,
+      pointsAwarded: challengePoints.envidoPoints,
+    };
+  }
+
+  // Calculate and award Envido points (manual endpoint — kept for backward compatibility)
   async calculateEnvidoWinner(gameId: string): Promise<any> {
     const game = await this.getGameState(gameId);
 

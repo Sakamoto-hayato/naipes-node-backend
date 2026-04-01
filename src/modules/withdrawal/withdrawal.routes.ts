@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import withdrawalController from './withdrawal.controller';
-import { authenticate } from '../../shared/middleware/auth.middleware';
+import { authenticate, requireAdmin } from '../../shared/middleware/auth.middleware';
 
 const router = Router();
 
@@ -14,8 +14,8 @@ router.get('/:id', withdrawalController.getRequestById);
 router.post('/:id/cancel', withdrawalController.cancelRequest);
 
 // Admin routes
-router.get('/admin/all', withdrawalController.getAllRequests);
-router.put('/admin/:id', withdrawalController.updateRequest);
-router.get('/admin/stats', withdrawalController.getStats);
+router.get('/admin/all', requireAdmin, withdrawalController.getAllRequests);
+router.put('/admin/:id', requireAdmin, withdrawalController.updateRequest);
+router.get('/admin/stats', requireAdmin, withdrawalController.getStats);
 
 export default router;
