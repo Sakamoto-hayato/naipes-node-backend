@@ -16,6 +16,7 @@ interface JwtPayload {
 
 export class GameGateway {
   private io: Server;
+  private disconnectedPlayers: Map<string, number> = new Map(); // "userId:gameId" -> disconnect timestamp
 
   constructor(io: Server) {
     this.io = io;
@@ -110,7 +111,16 @@ export class GameGateway {
         }
       });
 
-      // Disconnect
+      // Request active game (for reconnection without knowing gameId)
+      socket.on('get-active-game', async () => {
+        try {
+          await this.handleGetActiveGame(socket);
+        } catch (error) {
+          this.handleError(socket, 'get-active-game-error', error);
+        }
+      });
+
+      // Disconnect — notify room, start reconnection grace period
       socket.on('disconnect', () => {
         logger.info(`Game socket disconnected: ${socket.id}, userId: ${socket.userId}`);
         if (socket.gameId) {
@@ -118,6 +128,23 @@ export class GameGateway {
             userId: socket.userId,
             timestamp: new Date().toISOString(),
           });
+
+          // Store disconnect time for grace period (tracked in-memory)
+          this.disconnectedPlayers.set(`${socket.userId}:${socket.gameId}`, Date.now());
+
+          // After grace period (60 seconds), auto-forfeit if still disconnected
+          setTimeout(async () => {
+            const key = `${socket.userId}:${socket.gameId}`;
+            if (this.disconnectedPlayers.has(key)) {
+              this.disconnectedPlayers.delete(key);
+              logger.info(`Player ${socket.userId} did not reconnect to game ${socket.gameId} — marking abandoned`);
+              // Notify remaining player
+              this.notifyGameRoom(socket.gameId!, 'player-abandoned', {
+                userId: socket.userId,
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }, 60000);
         }
       });
     });
@@ -139,6 +166,19 @@ export class GameGateway {
     // Join room
     socket.join(`game:${gameId}`);
     socket.gameId = gameId;
+
+    // Clear disconnect tracking (player reconnected)
+    const disconnectKey = `${socket.userId}:${gameId}`;
+    if (this.disconnectedPlayers.has(disconnectKey)) {
+      this.disconnectedPlayers.delete(disconnectKey);
+      logger.info(`Player ${socket.userId} reconnected to game ${gameId}`);
+
+      // Notify opponent that player reconnected
+      socket.to(`game:${gameId}`).emit('player-reconnected', {
+        userId: socket.userId,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     logger.info(`User ${socket.userId} joined game ${gameId}`);
 
@@ -339,6 +379,24 @@ export class GameGateway {
           timestamp: new Date().toISOString(),
         });
       }
+    }
+  }
+
+  // Get user's active game (for reconnection)
+  private async handleGetActiveGame(socket: AuthenticatedSocket) {
+    if (!socket.userId) {
+      throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    // Find active game for this user
+    const games = await gameService.getUserGames(socket.userId, 'active');
+    const activeGame = games[0]; // Most recent active game
+
+    if (activeGame) {
+      // Auto-join the game room
+      await this.handleJoinGame(socket, activeGame.id);
+    } else {
+      socket.emit('no-active-game', { timestamp: new Date().toISOString() });
     }
   }
 
