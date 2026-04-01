@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import authService from './auth.service';
 import { successResponse, createdResponse } from '../../shared/utils/response';
 import { asyncHandler } from '../../shared/middleware/error.middleware';
+import notificationService from '../../shared/services/notification.service';
 
 export class AuthController {
   // POST /api/auth/register
@@ -88,6 +89,33 @@ export class AuthController {
     const result = await authService.resendConfirmation(email);
 
     return successResponse(res, result, result.message);
+  });
+
+  // POST /api/auth/register-token
+  registerDeviceToken = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const { token, platform, deviceModel, appVersion } = req.body;
+
+    if (!token || !platform) {
+      throw new Error('Token and platform are required');
+    }
+
+    await notificationService.registerDeviceToken(userId, token, platform, deviceModel, appVersion);
+
+    return successResponse(res, null, 'Device token registered');
+  });
+
+  // POST /api/auth/unregister-token
+  unregisterDeviceToken = asyncHandler(async (req: Request, res: Response) => {
+    const { token } = req.body;
+
+    if (!token) {
+      throw new Error('Token is required');
+    }
+
+    await notificationService.unregisterDeviceToken(token);
+
+    return successResponse(res, null, 'Device token unregistered');
   });
 }
 

@@ -16,4 +16,8 @@ router.post('/resend-confirmation', authController.resendConfirmation);
 // Protected routes (authentication required)
 router.get('/me', authenticate, authController.getMe);
 
+// Device token registration (for push notifications)
+router.post('/register-token', authenticate, authController.registerDeviceToken);
+router.post('/unregister-token', authenticate, authController.unregisterDeviceToken);
+
 export default router;

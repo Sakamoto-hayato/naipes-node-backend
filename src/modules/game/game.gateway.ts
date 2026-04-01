@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import logger from '../../config/logger';
 import gameService from './game.service';
 import botService from './services/bot.service';
+import notificationService from '../../shared/services/notification.service';
 import { AppError } from '../../shared/middleware/error.middleware';
 
 interface AuthenticatedSocket extends Socket {
@@ -249,6 +250,12 @@ export class GameGateway {
         userId: updatedGame.turnUserId,
         timestamp: new Date().toISOString(),
       });
+
+      // Push notification for turn (in case opponent app is backgrounded)
+      const oppName = updatedGame.turnUserId === updatedGame.hostUserId
+        ? updatedGame.guestUser?.username
+        : updatedGame.hostUser?.username;
+      notificationService.notifyYourTurn(updatedGame.turnUserId, gameId, oppName || 'rival');
     }
 
     const currentRound = updatedGame.rounds[updatedGame.rounds.length - 1];
@@ -277,6 +284,14 @@ export class GameGateway {
         game: updatedGame,
         timestamp: new Date().toISOString(),
       });
+
+      // Push notifications for game result
+      const winnerId = updatedGame.userWonId;
+      const loserId = winnerId === updatedGame.hostUserId ? updatedGame.guestUserId : updatedGame.hostUserId;
+      const winnerName = winnerId === updatedGame.hostUserId ? updatedGame.hostUser?.username : updatedGame.guestUser?.username;
+      const loserName = loserId === updatedGame.hostUserId ? updatedGame.hostUser?.username : updatedGame.guestUser?.username;
+      if (winnerId) notificationService.notifyGameFinished(winnerId, true, loserName || 'rival', gameId);
+      if (loserId) notificationService.notifyGameFinished(loserId, false, winnerName || 'rival', gameId);
     }
 
     // Trigger bot turn if applicable
