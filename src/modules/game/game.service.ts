@@ -860,7 +860,7 @@ export class GameService {
   }
 
   // Process accepted Envido: calculate scores and award points immediately
-  private async processAcceptedEnvido(gameId: string, roundId: string, trickId: string) {
+  private async processAcceptedEnvido(_gameId: string, roundId: string, trickId: string) {
     const round = await prisma.round.findUnique({
       where: { id: roundId },
       include: {

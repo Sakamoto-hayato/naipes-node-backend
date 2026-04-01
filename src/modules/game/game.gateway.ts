@@ -471,7 +471,7 @@ export class GameGateway {
       if (!botUserId || game.turnUserId !== botUserId) return;
 
       // Execute bot turn (async — will trigger game state updates)
-      const result = await botService.executeBotTurn(gameId, botUserId);
+      await botService.executeBotTurn(gameId, botUserId);
 
       // After bot acts, send updated state to human player
       const updatedGame = await gameService.getGameState(gameId);

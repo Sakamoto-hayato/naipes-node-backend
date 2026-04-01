@@ -12,7 +12,6 @@ import {
   ChallengeType,
   ChallengeCategory,
   getChallengeCategory,
-  CHALLENGE_POINTS,
 } from '../constants/challenge-values';
 import gameService from '../game.service';
 import logger from '../../../config/logger';
@@ -82,7 +81,7 @@ function shouldChallenge(
   myScore: number,
   oppScore: number,
 ): { should: boolean; type: ChallengeType | null } {
-  const { high, mid } = countByClass(myCards);
+  const { high } = countByClass(myCards);
 
   // Envido decision (only trick 1)
   if (trickNumber === 1) {
@@ -112,8 +111,8 @@ function shouldChallenge(
 function shouldAcceptChallenge(
   challengeType: ChallengeType,
   myCards: string[],
-  myScore: number,
-  oppScore: number,
+  _myScore: number,
+  _oppScore: number,
 ): boolean {
   const category = getChallengeCategory(challengeType);
   const { high, mid } = countByClass(myCards);
@@ -192,7 +191,6 @@ export class BotService {
       // Figure out which cards are already played in this round
       const playedCards = new Set<string>();
       for (const trick of activeRound.tricks) {
-        const myField = isHost ? 'handUserCard' : 'otherUserCard';
         const adjustedField = activeRound.handUserId === botUserId ? 'handUserCard' : 'otherUserCard';
         if ((trick as any)[adjustedField]) playedCards.add((trick as any)[adjustedField]);
       }

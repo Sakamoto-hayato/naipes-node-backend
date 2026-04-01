@@ -337,16 +337,13 @@ class UserService {
 
     return { message: 'Account deleted successfully' };
   }
-}
 
-export default new UserService();
   // Search users by username
   async searchUsers(query: string) {
     const users = await prisma.user.findMany({
       where: {
         username: {
           contains: query,
-          mode: 'insensitive',
         },
         deletedAt: null,
         enabled: true,

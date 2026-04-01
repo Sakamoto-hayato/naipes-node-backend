@@ -218,14 +218,13 @@ export class UserController {
   });
 
   // POST /api/users/me/avatar - Upload avatar image
-  uploadAvatar = asyncHandler(async (req: Request, res: Response) => {
+  uploadAvatar = asyncHandler(async (req: Request, _res: Response) => {
     const userId = req.user?.userId;
     if (!userId) {
       throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
     }
 
     // TODO: Implement file upload logic with multer
-    // For now, return a placeholder
     throw new AppError('Avatar upload not yet implemented', 501, 'NOT_IMPLEMENTED');
   });
 
