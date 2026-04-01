@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import userController from './user.controller';
 import { authenticate } from '../../shared/middleware/auth.middleware';
+import { avatarUpload } from '../../shared/middleware/upload.middleware';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/me/achievements', userController.getUserAchievements);
 router.get('/:id/achievements', userController.getUserAchievementsById);
 
 // Avatar routes
-router.post('/me/avatar', userController.uploadAvatar);
+router.post('/me/avatar', avatarUpload, userController.uploadAvatar);
 router.put('/me/avatar', userController.updateAvatar);
 
 // Settings routes

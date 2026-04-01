@@ -4,6 +4,7 @@ import logger from '../../config/logger';
 import gameService from './game.service';
 import botService from './services/bot.service';
 import notificationService from '../../shared/services/notification.service';
+import presenceService from '../../shared/services/presence.service';
 import { AppError } from '../../shared/middleware/error.middleware';
 
 interface AuthenticatedSocket extends Socket {
@@ -50,6 +51,11 @@ export class GameGateway {
     // Connection handler
     gameNamespace.on('connection', (socket: AuthenticatedSocket) => {
       logger.info(`Game socket connected: ${socket.id}, userId: ${socket.userId}`);
+
+      // Track online presence
+      if (socket.userId) {
+        presenceService.userConnected(socket.userId, socket.id);
+      }
 
       // Join game room
       socket.on('join-game', async (data: { gameId: string }) => {
@@ -143,6 +149,11 @@ export class GameGateway {
       // Disconnect — notify room, start reconnection grace period
       socket.on('disconnect', () => {
         logger.info(`Game socket disconnected: ${socket.id}, userId: ${socket.userId}`);
+
+        // Track offline presence
+        if (socket.userId) {
+          presenceService.userDisconnected(socket.userId, socket.id);
+        }
         if (socket.gameId) {
           this.notifyGameRoom(socket.gameId, 'player-disconnected', {
             userId: socket.userId,

@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { AppError } from '../../shared/middleware/error.middleware';
+import presenceService from '../../shared/services/presence.service';
 
 export interface SendFriendRequestDto {
   friendUserId: string;
@@ -57,7 +58,7 @@ class FriendService {
         gamesWon: friend.gamesWon,
         points: friend.points,
         status: 'accepted',
-        isOnline: false, // TODO: Implement online status tracking
+        isOnline: presenceService.isOnline(friend.id),
         createdAt: friendship.createdAt,
         acceptedAt: friendship.acceptedAt,
       };

@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
+import path from 'path';
+import sharp from 'sharp';
 import userService from './user.service';
 import { successResponse } from '../../shared/utils/response';
 import { asyncHandler, AppError } from '../../shared/middleware/error.middleware';
+import { UPLOAD_DIR } from '../../shared/middleware/upload.middleware';
 
 export class UserController {
   // GET /api/users/profile - Get current user's profile
@@ -218,14 +221,37 @@ export class UserController {
   });
 
   // POST /api/users/me/avatar - Upload avatar image
-  uploadAvatar = asyncHandler(async (req: Request, _res: Response) => {
+  uploadAvatar = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.userId;
     if (!userId) {
       throw new AppError('User not authenticated', 401, 'UNAUTHORIZED');
     }
 
-    // TODO: Implement file upload logic with multer
-    throw new AppError('Avatar upload not yet implemented', 501, 'NOT_IMPLEMENTED');
+    if (!req.file) {
+      throw new AppError('No image file provided', 400, 'NO_FILE');
+    }
+
+    // Process image with sharp: resize to 256x256, convert to webp
+    const filename = `${userId}_${Date.now()}.webp`;
+    const outputPath = path.join(UPLOAD_DIR, filename);
+
+    await sharp(req.file.buffer)
+      .resize(256, 256, { fit: 'cover' })
+      .webp({ quality: 80 })
+      .toFile(outputPath);
+
+    // Build URL path
+    const avatarUrl = `/uploads/avatars/${filename}`;
+
+    // Update user profile
+    const updatedProfile = await userService.updateProfile(userId, {
+      profilePicture: avatarUrl,
+    });
+
+    return successResponse(res, {
+      profilePicture: avatarUrl,
+      user: updatedProfile,
+    }, 'Avatar uploaded successfully');
   });
 
   // PUT /api/users/me/avatar - Update avatar (predefined avatar ID)

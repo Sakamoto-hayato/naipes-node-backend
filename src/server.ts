@@ -1,5 +1,6 @@
 import express, { Application } from 'express';
 import http from 'http';
+import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -53,6 +54,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve uploaded files (avatars etc.)
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Request logging (development)
 if (process.env.NODE_ENV === 'development') {
